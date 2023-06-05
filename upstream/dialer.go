@@ -60,18 +60,42 @@ func newSimpleDialer(options upstream.UpstreamDialerOption) (*simpleDialer, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to get interface %s: %v", options.BindInterface, err)
 		}
-		tcp4Dialer.Control = control.AppendControl(tcp4Dialer.Control, func(network string, address string, c syscall.RawConn) error {
-			return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
-		})
-		tcp6Dialer.Control = control.AppendControl(tcp6Dialer.Control, func(network string, address string, c syscall.RawConn) error {
-			return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
-		})
-		udp4Dialer.Control = control.AppendControl(udp4Dialer.Control, func(network string, address string, c syscall.RawConn) error {
-			return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
-		})
-		udp4Dialer.Control = control.AppendControl(udp6Dialer.Control, func(network string, address string, c syscall.RawConn) error {
-			return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
-		})
+		if tcp4Dialer.Control == nil {
+			tcp4Dialer.Control = func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
+			}
+		} else {
+			tcp4Dialer.Control = control.AppendControl(tcp4Dialer.Control, func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
+			})
+		}
+		if tcp6Dialer.Control == nil {
+			tcp6Dialer.Control = func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
+			}
+		} else {
+			tcp6Dialer.Control = control.AppendControl(tcp6Dialer.Control, func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
+			})
+		}
+		if udp4Dialer.Control == nil {
+			udp4Dialer.Control = func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
+			}
+		} else {
+			udp4Dialer.Control = control.AppendControl(udp4Dialer.Control, func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "4", netInterface.Name, netInterface.Index)
+			})
+		}
+		if udp6Dialer.Control == nil {
+			udp6Dialer.Control = func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
+			}
+		} else {
+			udp6Dialer.Control = control.AppendControl(udp6Dialer.Control, func(network string, address string, c syscall.RawConn) error {
+				return control.BindToInterface(c, "6", netInterface.Name, netInterface.Index)
+			})
+		}
 	}
 	if options.BindIP.IsValid() {
 		tcp4Dialer.LocalAddr = &net.TCPAddr{

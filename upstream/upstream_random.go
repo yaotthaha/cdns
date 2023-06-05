@@ -49,13 +49,13 @@ func (u *randomUpstream) Type() string {
 }
 
 func (u *randomUpstream) Start() error {
-	u.upstreams = make([]adapter.Upstream, 0, len(u.upstreamTags))
-	for i, tag := range u.upstreamTags {
+	u.upstreams = make([]adapter.Upstream, 0)
+	for _, tag := range u.upstreamTags {
 		up := u.core.GetUpstream(tag)
 		if up == nil {
 			return fmt.Errorf("start random upstream: upstream [%s] not found", tag)
 		}
-		u.upstreams[i] = up
+		u.upstreams = append(u.upstreams, up)
 	}
 	return nil
 }

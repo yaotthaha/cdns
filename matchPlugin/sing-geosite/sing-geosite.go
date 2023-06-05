@@ -143,7 +143,7 @@ func (s *SingGeoSite) Start() error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info("load geosite success")
+	s.logger.Info(fmt.Sprintf("load geosite success: %d", len(codeMap)))
 	s.codeMap.Store(&codeMap)
 	if s.autoReload {
 		go s.inotifyReload()

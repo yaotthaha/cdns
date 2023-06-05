@@ -22,7 +22,7 @@ const PluginType = "cache"
 var _ adapter.ExecPlugin = (*Cache)(nil)
 
 func init() {
-	adapter.RegisterExecPlugin("cache", NewCache)
+	adapter.RegisterExecPlugin(PluginType, NewCache)
 }
 
 type Cache struct {
@@ -81,11 +81,24 @@ func (c *Cache) Type() string {
 
 func (c *Cache) Start() error {
 	if c.dumpFile != "" {
-		cacheMap, err := c.readFromFile()
-		if err != nil {
-			return err
+		content, err := os.ReadFile(c.dumpFile)
+		if err == nil {
+			cacheMap, err := cachemap.RestoreFromBytes(c.ctx, content)
+			if err != nil {
+				return fmt.Errorf("restore cache map fail: %s", err)
+			}
+			c.cacheMap.Store(cacheMap)
+		} else if os.IsNotExist(err) {
+			f, err := os.Create(c.dumpFile)
+			if err != nil {
+				return fmt.Errorf("create file fail: %s", err)
+			}
+			f.Close()
+			cacheMap := cachemap.New(c.ctx)
+			c.cacheMap.Store(cacheMap)
+		} else {
+			return fmt.Errorf("read file fail: %s", err)
 		}
-		c.cacheMap.Store(cacheMap)
 	} else {
 		cacheMap := cachemap.New(c.ctx)
 		c.cacheMap.Store(cacheMap)
@@ -169,18 +182,6 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 		return false
 	}
 	return true
-}
-
-func (c *Cache) readFromFile() (*cachemap.CacheMap, error) {
-	content, err := os.ReadFile(c.dumpFile)
-	if err != nil {
-		return nil, fmt.Errorf("read file fail: %s", err)
-	}
-	cacheMap, err := cachemap.RestoreFromBytes(c.ctx, content)
-	if err != nil {
-		return nil, fmt.Errorf("restore cache map fail: %s", err)
-	}
-	return cacheMap, nil
 }
 
 func (c *Cache) saveToFile(cacheMap *cachemap.CacheMap) error {

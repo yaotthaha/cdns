@@ -15,7 +15,7 @@ const PluginType = "prefer"
 var _ adapter.ExecPlugin = (*Prefer)(nil)
 
 func init() {
-	adapter.RegisterExecPlugin("cache", NewPrefer)
+	adapter.RegisterExecPlugin(PluginType, NewPrefer)
 }
 
 type Prefer struct {

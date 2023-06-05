@@ -41,6 +41,9 @@ func (u *UpstreamHTTPSOption) UnmarshalYAML(unmarshal func(interface{}) error) e
 	if err != nil {
 		return err
 	}
+	if upstreamHTTPSOption.URL == "" {
+		return fmt.Errorf("upstream: https: url: %s", err)
+	}
 	url2, err := url.Parse(upstreamHTTPSOption.URL)
 	if err != nil {
 		return fmt.Errorf("upstream: https: url: %s", err)

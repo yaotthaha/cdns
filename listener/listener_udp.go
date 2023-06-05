@@ -114,6 +114,9 @@ func (l *udpListener) dialHandler(buf []byte, remoteAddr net.Addr) {
 	}
 	_, err := l.udpConn.WriteTo(respBytes, remoteAddr)
 	if err != nil {
+		if tools.IsCloseOrCanceled(err) {
+			return
+		}
 		l.logger.ErrorContext(ctx, fmt.Sprintf("write fail: %s", err))
 		return
 	}
