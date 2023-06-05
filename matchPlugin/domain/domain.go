@@ -104,7 +104,7 @@ func (d *Domain) Start() error {
 	if d.fileList != nil {
 		for _, filename := range d.fileList {
 			d.logger.Info(fmt.Sprintf("loading domain file: %s", filename))
-			ruleItem, err := d.readRules(filename)
+			ruleItem, err := readRules(filename)
 			if err != nil {
 				return err
 			}
@@ -214,7 +214,7 @@ type ruleItem struct {
 	regex   []*regexp.Regexp
 }
 
-func (d *Domain) readRules(filename string) (*ruleItem, error) {
+func readRules(filename string) (*ruleItem, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err

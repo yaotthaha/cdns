@@ -10,6 +10,7 @@ type DNSContext struct {
 	Listener     string
 	ClientIP     netip.AddrPort
 	Mark         uint64
+	MetaData     map[string]any
 	UsedWorkflow []Workflow
 	UsedUpstream []Upstream
 	ReqMsg       *dns.Msg

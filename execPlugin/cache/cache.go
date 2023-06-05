@@ -2,10 +2,19 @@ package cache
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/execPlugin/cache/cachemap"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
+
+	"github.com/miekg/dns"
+	"gopkg.in/yaml.v3"
 )
 
 const PluginType = "cache"
@@ -17,7 +26,15 @@ func init() {
 }
 
 type Cache struct {
-	tag string
+	tag          string
+	ctx          context.Context
+	logger       log.ContextLogger
+	maxSize      uint64
+	dumpFile     string
+	dumpInterval time.Duration
+
+	cacheMap atomic.Pointer[cachemap.CacheMap]
+	dumpLock sync.Mutex
 }
 
 type option struct {
@@ -29,6 +46,26 @@ type option struct {
 func NewCache(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	c := &Cache{
 		tag: tag,
+	}
+
+	optionBytes, err := yaml.Marshal(args)
+	if err != nil {
+		return nil, fmt.Errorf("parse args fail: %s", err)
+	}
+	var op option
+	err = yaml.Unmarshal(optionBytes, &op)
+	if err != nil {
+		return nil, fmt.Errorf("parse args fail: %s", err)
+	}
+
+	if op.Size > 0 {
+		c.maxSize = op.Size
+	}
+	if op.DumpFile != "" {
+		c.dumpFile = op.DumpFile
+	}
+	if op.DumpInterval > 0 {
+		c.dumpInterval = time.Duration(op.DumpInterval)
 	}
 
 	return c, nil
@@ -43,23 +80,140 @@ func (c *Cache) Type() string {
 }
 
 func (c *Cache) Start() error {
+	if c.dumpFile != "" {
+		cacheMap, err := c.readFromFile()
+		if err != nil {
+			return err
+		}
+		c.cacheMap.Store(cacheMap)
+	} else {
+		cacheMap := cachemap.New(c.ctx)
+		c.cacheMap.Store(cacheMap)
+	}
+	if c.dumpInterval > 0 {
+		go c.dump()
+	}
 	return nil
 }
 
 func (c *Cache) Close() error {
+	if c.dumpLock.TryLock() {
+		cacheMap := c.cacheMap.Load()
+		err := c.saveToFile(cacheMap)
+		if err != nil {
+			c.logger.Error(err.Error())
+		}
+		c.dumpLock.Unlock()
+	}
 	return nil
 }
 
 func (c *Cache) WithContext(ctx context.Context) {
-	//
+	c.ctx = ctx
 }
 
 func (c *Cache) WithLogger(logger log.Logger) {
-	// TODO implement me
-	panic("implement me")
+	c.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s/%s", PluginType, c.tag)))
 }
 
-func (c *Cache) Exec(ctx context.Context, m map[string]any, dnsCtx *adapter.DNSContext) bool {
-	// TODO implement me
-	panic("implement me")
+func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+	cacheMap := c.cacheMap.Load()
+	if cacheMap == nil {
+		return true
+	}
+	if _, ok := args["store"]; ok {
+		if dnsCtx.RespMsg == nil {
+			return true
+		}
+		if c.maxSize > 0 {
+			if cacheMap.Len() > int(c.maxSize) {
+				return true
+			}
+		}
+		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
+		maxTTL := uint32(0)
+		for _, rr := range dnsCtx.RespMsg.Answer {
+			ttl := rr.Header().Ttl
+			if maxTTL < ttl {
+				maxTTL = ttl
+			}
+		}
+		dnsBytes, err := dnsCtx.RespMsg.Pack()
+		if err != nil {
+			c.logger.ErrorContext(ctx, fmt.Sprintf("pack dns msg fail: %s", err))
+			return true
+		}
+		c.logger.InfoContext(ctx, fmt.Sprintf("cache ==> %s", key))
+		cacheMap.Set(key, dnsBytes, time.Now().Add(time.Duration(maxTTL)*time.Second))
+	} else if _, ok := args["restore"]; ok {
+		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
+		dnsBytesAny, _, err := cacheMap.Get(key)
+		if err != nil {
+			return true
+		}
+		dnsBytes, ok := dnsBytesAny.([]byte)
+		if !ok {
+			return true
+		}
+		dnsMsg := &dns.Msg{}
+		err = dnsMsg.Unpack(dnsBytes)
+		if err != nil {
+			return true
+		}
+		dnsMsg.SetReply(dnsCtx.ReqMsg)
+		dnsCtx.RespMsg = dnsMsg
+		c.logger.InfoContext(ctx, fmt.Sprintf("restore ==> %s", key))
+	}
+	if _, ok := args["return"]; ok {
+		c.logger.DebugContext(ctx, "return")
+		return false
+	}
+	return true
+}
+
+func (c *Cache) readFromFile() (*cachemap.CacheMap, error) {
+	content, err := os.ReadFile(c.dumpFile)
+	if err != nil {
+		return nil, fmt.Errorf("read file fail: %s", err)
+	}
+	cacheMap, err := cachemap.RestoreFromBytes(c.ctx, content)
+	if err != nil {
+		return nil, fmt.Errorf("restore cache map fail: %s", err)
+	}
+	return cacheMap, nil
+}
+
+func (c *Cache) saveToFile(cacheMap *cachemap.CacheMap) error {
+	content, err := cacheMap.EncodeToBytes()
+	if err != nil {
+		return fmt.Errorf("encode cachemap fail: %s", err)
+	}
+	err = os.WriteFile(c.dumpFile, content, 0o644)
+	if err != nil {
+		return fmt.Errorf("write file fail: %s", err)
+	}
+	return nil
+}
+
+func (c *Cache) dump() {
+	ticker := time.NewTicker(c.dumpInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			c.dumpLock.Lock()
+			cacheMap := c.cacheMap.Load()
+			err := c.saveToFile(cacheMap)
+			if err != nil {
+				c.logger.Error(err.Error())
+			}
+			c.dumpLock.Unlock()
+		case <-c.ctx.Done():
+			return
+		}
+	}
+}
+
+func dnsQuestionToString(question dns.Question) string {
+	return fmt.Sprintf("%s %s %s", question.Name, dns.TypeToString[question.Qtype], dns.ClassToString[question.Qclass])
 }
