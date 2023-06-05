@@ -1,0 +1,4 @@
+package execPlugin
+
+func Register() {
+}
