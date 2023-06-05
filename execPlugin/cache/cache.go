@@ -134,6 +134,7 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 	if cacheMap == nil {
 		return true
 	}
+	done := false
 	if _, ok := args["store"]; ok {
 		if dnsCtx.RespMsg == nil {
 			return true
@@ -144,12 +145,18 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 			}
 		}
 		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
-		maxTTL := uint32(0)
-		for _, rr := range dnsCtx.RespMsg.Answer {
-			ttl := rr.Header().Ttl
-			if maxTTL < ttl {
-				maxTTL = ttl
+		var maxTTL uint32
+		if dnsCtx.RespMsg.Answer != nil && len(dnsCtx.RespMsg.Answer) > 0 {
+			maxTTL = 0
+			for _, rr := range dnsCtx.RespMsg.Answer {
+				ttl := rr.Header().Ttl
+				if maxTTL < ttl {
+					maxTTL = ttl
+				}
 			}
+		}
+		if maxTTL == 0 {
+			maxTTL = 300
 		}
 		dnsBytes, err := dnsCtx.RespMsg.Pack()
 		if err != nil {
@@ -158,6 +165,7 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 		}
 		c.logger.InfoContext(ctx, fmt.Sprintf("cache ==> %s", key))
 		cacheMap.Set(key, dnsBytes, time.Now().Add(time.Duration(maxTTL)*time.Second))
+		done = true
 	} else if _, ok := args["restore"]; ok {
 		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
 		dnsBytesAny, _, err := cacheMap.Get(key)
@@ -176,8 +184,9 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 		dnsMsg.SetReply(dnsCtx.ReqMsg)
 		dnsCtx.RespMsg = dnsMsg
 		c.logger.InfoContext(ctx, fmt.Sprintf("restore ==> %s", key))
+		done = true
 	}
-	if _, ok := args["return"]; ok {
+	if _, ok := args["return"]; ok && done {
 		c.logger.DebugContext(ctx, "return")
 		return false
 	}

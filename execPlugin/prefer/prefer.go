@@ -113,13 +113,22 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			}
 		}
 		if hasAAAA {
-			dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeSuccess)
+			newAnswers := make([]dns.RR, 0)
+			for _, rr := range dnsCtx.RespMsg.Answer {
+				switch r := rr.(type) {
+				case *dns.A:
+					continue
+				default:
+					newAnswers = append(newAnswers, r)
+				}
+			}
+			dnsCtx.RespMsg.Answer = newAnswers
 		}
 	}
 	if DNSTypeAAAA && prefer == "A" {
 		reqADNSMsg := &dns.Msg{}
 		reqADNSMsg.SetQuestion(dns.Fqdn(dnsCtx.ReqMsg.Question[0].Name), dns.TypeA)
-		upstream := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)]
+		upstream := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)-1]
 		respADNSMsg, err := upstream.Exchange(ctx, reqADNSMsg)
 		if err != nil {
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer A fail: dns query fail"))
@@ -133,7 +142,16 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			}
 		}
 		if hasA {
-			dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeSuccess)
+			newAnswers := make([]dns.RR, 0)
+			for _, rr := range dnsCtx.RespMsg.Answer {
+				switch r := rr.(type) {
+				case *dns.AAAA:
+					continue
+				default:
+					newAnswers = append(newAnswers, r)
+				}
+			}
+			dnsCtx.RespMsg.Answer = newAnswers
 		}
 	}
 	return true
