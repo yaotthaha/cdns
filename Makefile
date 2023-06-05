@@ -1,5 +1,8 @@
 NAME = cdns
 
+build:
+	@go build -o $(NAME) -v -trimpath -ldflags "-s -w -buildid=" .
+
 fmt:
 	@gofumpt -l -w .
 	@gofmt -s -w .

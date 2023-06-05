@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/core"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option"
@@ -17,7 +18,8 @@ import (
 )
 
 var runCommand = &cobra.Command{
-	Use: "run",
+	Use:   "run",
+	Short: "Run Server",
 	Run: func(cmd *cobra.Command, args []string) {
 		os.Exit(run())
 	},
@@ -60,6 +62,7 @@ func run() int {
 		logger.SetOutput(f)
 		defer f.Close()
 	}
+	logger.Info(fmt.Sprintf("cdns version %s", constant.Version))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c, err := core.New(ctx, logger, options)

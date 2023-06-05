@@ -3,7 +3,8 @@ package cdns
 import "github.com/spf13/cobra"
 
 var mainCommand = &cobra.Command{
-	Use: "cdns",
+	Use:   "cdns",
+	Short: "A Custom DNS Server",
 }
 
 var paramConfig string
