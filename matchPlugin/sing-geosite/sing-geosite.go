@@ -3,17 +3,18 @@ package sing_geosite
 import (
 	"context"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/yaotthaha/cdns/adapter"
-	"github.com/yaotthaha/cdns/lib/types"
-	"github.com/yaotthaha/cdns/log"
-	"github.com/yaotthaha/cdns/matchPlugin/sing-geosite/geosite"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/types"
+	"github.com/yaotthaha/cdns/log"
+	"github.com/yaotthaha/cdns/matchPlugin/sing-geosite/geosite"
+
+	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
 )

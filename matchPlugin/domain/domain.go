@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/go-chi/chi"
 	"net/http"
 	"os"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
+	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
 )

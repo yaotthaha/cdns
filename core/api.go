@@ -3,15 +3,17 @@ package core
 import (
 	"context"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/yaotthaha/cdns/adapter"
-	"github.com/yaotthaha/cdns/log"
-	"github.com/yaotthaha/cdns/option"
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
 	"runtime/debug"
 	"strings"
+
+	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/log"
+	"github.com/yaotthaha/cdns/option"
+
+	"github.com/go-chi/chi"
 )
 
 type APIServer struct {

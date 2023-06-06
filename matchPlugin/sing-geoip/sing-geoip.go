@@ -3,7 +3,6 @@ package sing_geoip
 import (
 	"context"
 	"fmt"
-	"github.com/go-chi/chi"
 	"net"
 	"net/http"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/matchPlugin/sing-geoip/geoip"
 
+	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
 )

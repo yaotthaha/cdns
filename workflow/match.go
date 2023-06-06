@@ -3,10 +3,11 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"net/netip"
+
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
-	"net/netip"
 
 	"github.com/miekg/dns"
 )
