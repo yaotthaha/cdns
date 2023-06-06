@@ -21,5 +21,5 @@ func init() {
 }
 
 func showVersion() {
-	fmt.Println(fmt.Sprintf("cdns version %s", constant.Version))
+	fmt.Println(constant.GetVersion())
 }

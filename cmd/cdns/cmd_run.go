@@ -62,7 +62,7 @@ func run() int {
 		logger.SetOutput(f)
 		defer f.Close()
 	}
-	logger.Info(fmt.Sprintf("cdns version %s", constant.Version))
+	logger.Info(constant.GetVersion())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c, err := core.New(ctx, logger, options)
