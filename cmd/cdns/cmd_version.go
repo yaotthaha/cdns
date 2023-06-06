@@ -2,6 +2,7 @@ package cdns
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/yaotthaha/cdns/constant"
 
@@ -22,4 +23,5 @@ func init() {
 
 func showVersion() {
 	fmt.Println(constant.GetVersion())
+	fmt.Println(strings.TrimSpace(constant.GetAllPlugins()))
 }

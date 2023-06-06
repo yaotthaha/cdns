@@ -69,6 +69,16 @@ func NewMatchPlugin(typ string, tag string, args map[string]any) (MatchPlugin, e
 	return nil, fmt.Errorf("invalid match plugin type: %s", typ)
 }
 
+func GetAllMatchPlugin() []string {
+	matchPluginMapLock.RLock()
+	defer matchPluginMapLock.RUnlock()
+	var ret []string
+	for k := range matchPluginMap {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
 func RegisterExecPlugin(typ string, f CreateExecPluginFunc) {
 	execPluginMapLock.Lock()
 	defer execPluginMapLock.Unlock()
@@ -82,4 +92,14 @@ func NewExecPlugin(typ string, tag string, args map[string]any) (ExecPlugin, err
 		return f(tag, args)
 	}
 	return nil, fmt.Errorf("invalid exec plugin type: %s", typ)
+}
+
+func GetAllExecPlugin() []string {
+	execPluginMapLock.RLock()
+	defer execPluginMapLock.RUnlock()
+	var ret []string
+	for k := range execPluginMap {
+		ret = append(ret, k)
+	}
+	return ret
 }
