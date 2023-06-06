@@ -130,7 +130,12 @@ func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter
 			}
 		}(runCtx, workflow, itemDNSCtx)
 	}
+	go func() {
+		wg.Wait()
+		runCancel()
+	}()
 	select {
+	case <-runCtx.Done():
 	case <-ctx.Done():
 		runCancel()
 		wg.Wait()
