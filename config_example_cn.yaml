@@ -207,6 +207,8 @@ exec_plugins:
   - tag: cache
     type: cache
     args:
+    #############
+    # 支持调用 API 刷新规则，详见 api 模块，请求：GET /clean，会清除缓存（但不会清除缓存文件中的缓存），请求：GET /save，会将内存中的缓存保存到缓存文件中
 
   # Prefer插件，可以根据规则丢弃A/AAAA请求
   - tag: prefer
