@@ -1,6 +1,9 @@
 package log
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type tagLogger struct {
 	tag string
@@ -36,4 +39,64 @@ func (t *tagLogger) Debug(a ...any) {
 
 func (t *tagLogger) Fatal(a ...any) {
 	t.Print(Fatal, a...)
+}
+
+type tagContextLogger struct {
+	tag string
+	ContextLogger
+}
+
+func NewTagContextLogger(rootLogger ContextLogger, tag string) ContextLogger {
+	return &tagContextLogger{
+		tag:           tag,
+		ContextLogger: rootLogger,
+	}
+}
+
+func (t *tagContextLogger) Print(level Level, a ...any) {
+	t.ContextLogger.Print(level, fmt.Sprintf("[%s] %s", t.tag, fmt.Sprint(a...)))
+}
+
+func (t *tagContextLogger) Info(a ...any) {
+	t.Print(Info, a...)
+}
+
+func (t *tagContextLogger) Warn(a ...any) {
+	t.Print(Warn, a...)
+}
+
+func (t *tagContextLogger) Error(a ...any) {
+	t.Print(Error, a...)
+}
+
+func (t *tagContextLogger) Debug(a ...any) {
+	t.Print(Debug, a...)
+}
+
+func (t *tagContextLogger) Fatal(a ...any) {
+	t.Print(Fatal, a...)
+}
+
+func (t *tagContextLogger) FatalContext(ctx context.Context, a ...any) {
+	t.PrintContext(ctx, Fatal, a...)
+}
+
+func (t *tagContextLogger) InfoContext(ctx context.Context, a ...any) {
+	t.PrintContext(ctx, Info, a...)
+}
+
+func (t *tagContextLogger) WarnContext(ctx context.Context, a ...any) {
+	t.PrintContext(ctx, Warn, a...)
+}
+
+func (t *tagContextLogger) ErrorContext(ctx context.Context, a ...any) {
+	t.PrintContext(ctx, Error, a...)
+}
+
+func (t *tagContextLogger) DebugContext(ctx context.Context, a ...any) {
+	t.PrintContext(ctx, Debug, a...)
+}
+
+func (t *tagContextLogger) PrintContext(ctx context.Context, level Level, a ...any) {
+	t.ContextLogger.PrintContext(ctx, level, fmt.Sprintf("[%s] %s", t.tag, fmt.Sprint(a...)))
 }

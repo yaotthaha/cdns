@@ -131,6 +131,9 @@ func (c *Cache) WithLogger(contextLogger log.ContextLogger) {
 	c.logger = contextLogger
 }
 
+func (c *Cache) WithCore(_ adapter.ExecPluginCore) {
+}
+
 func (c *Cache) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/clean", func(w http.ResponseWriter, r *http.Request) {

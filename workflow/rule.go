@@ -20,7 +20,7 @@ type Rule struct {
 	execs    []*execItem
 }
 
-func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
+func newRule(core adapter.Core, options any) (*Rule, error) {
 	r := &Rule{
 		core: core,
 	}
@@ -83,6 +83,11 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 	if r.matchers != nil {
 		gm := false
 		for _, matcher := range r.matchers {
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+			}
 			if matcher.match(ctx, logger, dnsCtx) {
 				gm = true
 			}
@@ -92,6 +97,11 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 		}
 	}
 	for _, e := range r.execs {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
 		if !e.exec(ctx, logger, dnsCtx) {
 			return false
 		}

@@ -226,6 +226,11 @@ func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 			return true
 		}
 	}
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+	}
 	fileRule := i.fileRule.Load()
 	if fileRule != nil {
 		matchType, matchRule, match := fileRule.match(ctx, respIP)

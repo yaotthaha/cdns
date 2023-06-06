@@ -9,22 +9,13 @@ type RuleMatchOr struct {
 	Exec    types.Listable[RuleExecItem]  `yaml:"exec"`
 }
 
-func (r *RuleMatchOr) IsRule() {
-}
-
 type RuleMatchAnd struct {
 	MatchAnd types.Listable[RuleMatchItem] `yaml:"match_and"`
 	Exec     types.Listable[RuleExecItem]  `yaml:"exec"`
 }
 
-func (r *RuleMatchAnd) IsRule() {
-}
-
 type RuleExec struct {
 	Exec types.Listable[RuleExecItem] `yaml:"exec"`
-}
-
-func (r *RuleExec) IsRule() {
 }
 
 type RuleMatchItem struct {

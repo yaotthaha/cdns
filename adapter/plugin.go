@@ -9,6 +9,8 @@ import (
 	"github.com/yaotthaha/cdns/log"
 )
 
+type MatchPluginCore interface{}
+
 type MatchPlugin interface {
 	Tag() string
 	Type() string
@@ -20,6 +22,10 @@ type MatchPlugin interface {
 	Match(context.Context, map[string]any, *DNSContext) bool // true: match, false: no match
 }
 
+type ExecPluginCore interface {
+	GetWorkflow(string) Workflow
+}
+
 type ExecPlugin interface {
 	Tag() string
 	Type() string
@@ -27,6 +33,7 @@ type ExecPlugin interface {
 	Close() error
 	WithContext(context.Context)
 	WithLogger(log.ContextLogger)
+	WithCore(ExecPluginCore)
 	APIHandler() http.Handler
 	Exec(context.Context, map[string]any, *DNSContext) bool // true: continue, false: stop
 }

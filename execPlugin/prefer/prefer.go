@@ -57,6 +57,9 @@ func (p *Prefer) WithLogger(contextLogger log.ContextLogger) {
 	p.logger = contextLogger
 }
 
+func (p *Prefer) WithCore(_ adapter.ExecPluginCore) {
+}
+
 func (p *Prefer) APIHandler() http.Handler {
 	return nil
 }
@@ -113,6 +116,11 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer AAAA fail: dns query fail"))
 			return true
 		}
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
 		var hasAAAA bool
 		for _, rr := range respAAAADNSMsg.Answer {
 			if _, ok := rr.(*dns.AAAA); ok {
@@ -144,6 +152,11 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		if err != nil {
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer A fail: dns query fail"))
 			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		default:
 		}
 		var hasA bool
 		for _, rr := range respADNSMsg.Answer {

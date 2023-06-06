@@ -165,6 +165,11 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 	reader := s.reader.Load()
 	if reader != nil {
 		for _, ip := range ips {
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+			}
 			code := reader.Lookup(ip)
 			if code == "unknown" {
 				continue

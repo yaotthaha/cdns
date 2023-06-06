@@ -6,10 +6,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Rule interface {
-	IsRule()
-}
-
 type _WorkflowOption struct {
 	Tag   string           `yaml:"tag"`
 	Rules []map[string]any `yaml:"rules"`
@@ -17,7 +13,7 @@ type _WorkflowOption struct {
 
 type WorkflowOption struct {
 	Tag   string `yaml:"tag"`
-	Rules []Rule `yaml:"rules"`
+	Rules []any  `yaml:"rules"`
 }
 
 func (w *WorkflowOption) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -28,7 +24,7 @@ func (w *WorkflowOption) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	}
 	w.Tag = workflowOption.Tag
 	if workflowOption.Rules != nil && len(workflowOption.Rules) > 0 {
-		w.Rules = make([]Rule, len(workflowOption.Rules))
+		w.Rules = make([]any, len(workflowOption.Rules))
 		for i, v := range workflowOption.Rules {
 			var (
 				haveMatchOr  bool
@@ -45,7 +41,7 @@ func (w *WorkflowOption) UnmarshalYAML(unmarshal func(interface{}) error) error 
 					haveExec = true
 				}
 			}
-			var r Rule
+			var r any
 			switch {
 			case haveMatchOr && haveExec:
 				r = &RuleMatchOr{}

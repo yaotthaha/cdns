@@ -229,6 +229,11 @@ func (d *Domain) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DN
 			return true
 		}
 	}
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+	}
 	fileRule := d.fileRule.Load()
 	if fileRule != nil {
 		matchType, matchRule, match := fileRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)

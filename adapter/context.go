@@ -32,3 +32,48 @@ func (d *DNSContext) WithWorkflow(w Workflow) *DNSContext {
 	d.UsedWorkflow = append(d.UsedWorkflow, w)
 	return d
 }
+
+func (d *DNSContext) Clone() *DNSContext {
+	newD := &DNSContext{
+		Listener: d.Listener,
+		ClientIP: d.ClientIP,
+		Mark:     d.Mark,
+		MetaData: d.MetaData, // Unsafe
+	}
+	if d.UsedWorkflow != nil {
+		newD.UsedWorkflow = make([]Workflow, len(d.UsedWorkflow))
+		copy(newD.UsedWorkflow, d.UsedWorkflow)
+	}
+	if d.UsedUpstream != nil {
+		newD.UsedUpstream = make([]Upstream, len(d.UsedUpstream))
+		copy(newD.UsedUpstream, d.UsedUpstream)
+	}
+	if d.ReqMsg != nil {
+		newD.ReqMsg = d.ReqMsg.Copy()
+	}
+	if d.RespMsg != nil {
+		newD.RespMsg = d.RespMsg.Copy()
+	}
+	return newD
+}
+
+func (d *DNSContext) SaveTo(dnsCtx *DNSContext) {
+	dnsCtx.Listener = d.Listener
+	dnsCtx.ClientIP = d.ClientIP
+	dnsCtx.Mark = d.Mark
+	dnsCtx.MetaData = d.MetaData
+	if d.UsedWorkflow != nil {
+		dnsCtx.UsedWorkflow = make([]Workflow, len(d.UsedWorkflow))
+		copy(dnsCtx.UsedWorkflow, d.UsedWorkflow)
+	}
+	if d.UsedUpstream != nil {
+		dnsCtx.UsedUpstream = make([]Upstream, len(d.UsedUpstream))
+		copy(dnsCtx.UsedUpstream, d.UsedUpstream)
+	}
+	if d.ReqMsg != nil {
+		dnsCtx.ReqMsg = d.ReqMsg.Copy()
+	}
+	if d.RespMsg != nil {
+		dnsCtx.RespMsg = d.RespMsg.Copy()
+	}
+}
