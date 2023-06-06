@@ -94,7 +94,8 @@ func (w *WorkflowGo) APIHandler() http.Handler {
 }
 
 func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
-	w.logger.DebugContext(ctx, "workflow-go exec")
+	w.logger.DebugContext(ctx, "workflow-go start")
+	defer w.logger.DebugContext(ctx, "workflow-go end")
 	respChan := make(chan *adapter.DNSContext, 1)
 	var respDNSCtx *adapter.DNSContext
 	runCtx, runCancel := context.WithCancel(ctx)
@@ -104,6 +105,9 @@ func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter
 		wg.Add(1)
 		go func(runCtx context.Context, workflow adapter.Workflow, dnsCtx *adapter.DNSContext) {
 			defer wg.Done()
+			runCtx = log.AddContextTag(runCtx)
+			ctxTag := log.GetContextTag(runCtx)
+			w.logger.DebugContext(ctx, fmt.Sprintf("workflow [%s] start, id: %s", workflow.Tag(), ctxTag))
 			workflow.Exec(runCtx, dnsCtx)
 			select {
 			case <-runCtx.Done():

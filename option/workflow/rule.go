@@ -40,5 +40,6 @@ type RuleExecItem struct {
 	Upstream *string                 `yaml:"upstream,omitempty"`
 	JumpTo   *types.Listable[string] `yaml:"jump_to,omitempty"`
 	GoTo     *string                 `yaml:"go_to,omitempty"`
+	Clean    *bool                   `yaml:"clean,omitempty"`
 	Return   any                     `yaml:"return,omitempty"`
 }

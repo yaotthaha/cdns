@@ -27,6 +27,14 @@ func AddContextTag(ctx context.Context) context.Context {
 	return context.WithValue(ctx, (*contextTag)(nil), &contextMsg{tag: tools.RandomNumStr(8), start: time.Now()})
 }
 
+func GetContextTag(ctx context.Context) string {
+	v := ctx.Value((*contextTag)(nil))
+	if v == nil {
+		return ""
+	}
+	return v.(*contextMsg).tag
+}
+
 func NewContextLogger(rootLogger Logger) ContextLogger {
 	c := &contextLogger{
 		Logger: rootLogger,
