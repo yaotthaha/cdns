@@ -30,7 +30,7 @@ type WorkflowGo struct {
 }
 
 type option struct {
-	workflows []string `yaml:"workflows"`
+	Workflows []string `yaml:"workflows"`
 }
 
 func NewWorkflowGo(tag string, args map[string]any) (adapter.ExecPlugin, error) {
@@ -46,10 +46,10 @@ func NewWorkflowGo(tag string, args map[string]any) (adapter.ExecPlugin, error) 
 	if err != nil {
 		return nil, fmt.Errorf("parse args fail: %s", err)
 	}
-	if op.workflows == nil || len(op.workflows) < 1 {
+	if op.Workflows == nil || len(op.Workflows) < 1 {
 		return nil, fmt.Errorf("workflows must be at least 1")
 	}
-	w.workflowTags = op.workflows
+	w.workflowTags = op.Workflows
 	return w, nil
 }
 
@@ -62,7 +62,7 @@ func (w *WorkflowGo) Type() string {
 }
 
 func (w *WorkflowGo) Start() error {
-	w.workflow = make([]adapter.Workflow, len(w.workflowTags))
+	w.workflow = make([]adapter.Workflow, 0, len(w.workflowTags))
 	for _, workflowTag := range w.workflowTags {
 		workflow := w.core.GetWorkflow(workflowTag)
 		if workflow == nil {
@@ -93,11 +93,16 @@ func (w *WorkflowGo) APIHandler() http.Handler {
 	return nil
 }
 
+type respMsg struct {
+	id     string
+	dnsCtx *adapter.DNSContext
+}
+
 func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
 	w.logger.DebugContext(ctx, "workflow-go start")
 	defer w.logger.DebugContext(ctx, "workflow-go end")
-	respChan := make(chan *adapter.DNSContext, 1)
-	var respDNSCtx *adapter.DNSContext
+	respChan := make(chan *respMsg, 1)
+	var respDNSCtx *respMsg
 	runCtx, runCancel := context.WithCancel(ctx)
 	wg := sync.WaitGroup{}
 	for _, workflow := range w.workflow {
@@ -116,7 +121,10 @@ func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter
 			}
 			if dnsCtx.RespMsg != nil {
 				select {
-				case respChan <- dnsCtx:
+				case respChan <- &respMsg{
+					id:     ctxTag,
+					dnsCtx: dnsCtx,
+				}:
 				default:
 				}
 			}
@@ -131,9 +139,13 @@ func (w *WorkflowGo) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter
 		respDNSCtx = dnsMsg
 	}
 	runCancel()
-	wg.Wait()
+	go func() {
+		wg.Wait()
+		close(respChan)
+	}()
 	if respDNSCtx != nil {
-		respDNSCtx.SaveTo(dnsCtx)
+		w.logger.DebugContext(ctx, fmt.Sprintf("has resp_msg, use id [%s]", respDNSCtx.id))
+		respDNSCtx.dnsCtx.SaveTo(dnsCtx)
 	}
 	return true
 }

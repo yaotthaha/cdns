@@ -112,13 +112,15 @@ func (c *Cache) Start() error {
 }
 
 func (c *Cache) Close() error {
-	if c.dumpLock.TryLock() {
-		cacheMap := c.cacheMap.Load()
-		err := c.saveToFile(cacheMap)
-		if err != nil {
-			c.logger.Error(err.Error())
+	if c.dumpFile != "" {
+		if c.dumpLock.TryLock() {
+			cacheMap := c.cacheMap.Load()
+			err := c.saveToFile(cacheMap)
+			if err != nil {
+				c.logger.Error(err.Error())
+			}
+			c.dumpLock.Unlock()
 		}
-		c.dumpLock.Unlock()
 	}
 	return nil
 }

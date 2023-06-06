@@ -96,6 +96,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			}
 			ep.WithContext(ctx)
 			ep.WithLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s", ep.Tag()))))
+			ep.WithCore(core)
 			core.apiServer.MountExecPlugin(ep)
 			core.execPlugins[e.Tag] = ep
 		}

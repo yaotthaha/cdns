@@ -130,15 +130,18 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		}
 		if hasAAAA {
 			newAnswers := make([]dns.RR, 0)
+			removeN := 0
 			for _, rr := range dnsCtx.RespMsg.Answer {
 				switch r := rr.(type) {
 				case *dns.A:
+					removeN++
 					continue
 				default:
 					newAnswers = append(newAnswers, r)
 				}
 			}
 			dnsCtx.RespMsg.Answer = newAnswers
+			p.logger.DebugContext(ctx, fmt.Sprintf("prefer AAAA, remove A from answer: %d", removeN))
 		}
 	}
 	if DNSTypeAAAA && prefer == "A" {
@@ -167,15 +170,18 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		}
 		if hasA {
 			newAnswers := make([]dns.RR, 0)
+			removeN := 0
 			for _, rr := range dnsCtx.RespMsg.Answer {
 				switch r := rr.(type) {
 				case *dns.AAAA:
+					removeN++
 					continue
 				default:
 					newAnswers = append(newAnswers, r)
 				}
 			}
 			dnsCtx.RespMsg.Answer = newAnswers
+			p.logger.DebugContext(ctx, fmt.Sprintf("prefer A, remove AAAA from answer: %d", removeN))
 		}
 	}
 	return true

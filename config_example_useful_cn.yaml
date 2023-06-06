@@ -1,0 +1,163 @@
+log:
+  debug: false
+
+api:
+  listen: 127.0.0.1:1092
+  debug: false
+
+upstreams:
+  - tag: google-dns
+    type: tls
+    tls:
+      address: 8.8.4.4:853
+      server_name: dns.google
+      idle_timeout: 1m
+    dialer:
+      timeout: 500ms
+
+  - tag: ali-dns
+    type: https
+    https:
+      address: 223.5.5.5:443
+      url: https://dns.alidns.com/dns-query
+      header:
+        User-Agent: cdns/v0.0.1-alpha
+    dialer:
+      timeout: 200ms
+
+match_plugins:
+  - tag: geosite
+    type: sing-geosite
+    args:
+      file: /etc/cdns/geosite.db
+      code:
+        - private
+        - google-cn
+        - gfw
+        - cn
+
+  - tag: geoip
+    type: sing-geoip
+    args:
+      file: /etc/cdns/geoip.db
+
+
+exec_plugins:
+  - tag: cache
+    type: cache
+
+  - tag: prefer
+    type: prefer
+
+  - tag: final
+    type: workflow-go
+    args:
+      workflows:
+        - final-world
+        - final-cn
+
+workflows:
+  - tag: final-cn
+    rules:
+      - exec:
+          - upstream: ali-dns
+
+      - match_and:
+          - plugin:
+              tag: geoip
+              args:
+                code: cn
+            invert: true
+        exec:
+          - clean: true
+          - return: true
+
+  - tag: final-world
+    rules:
+      - exec:
+          - upstream: google-dns
+          - plugin:
+              tag: prefer
+              args:
+                prefer: A
+
+      - match_and:
+          - plugin:
+              tag: geoip
+              args:
+                code: cn
+        exec:
+          - clean: true
+          - return: true
+
+  - tag: main
+    rules:
+      - match_and:
+          - plugin:
+              tag: geosite
+              args:
+                code: private
+        exec:
+          - return: true
+
+      - exec:
+          - plugin:
+              tag: cache
+              args:
+                restore: true
+
+      - match_and:
+          - has_resp_msg: true
+        exec:
+          - return: true
+
+      - match_and:
+          - plugin:
+              tag: geosite
+              args:
+                code:
+                 - gfw
+                 - google-cn
+        exec:
+          - upstream: google-dns
+          - plugin:
+              tag: prefer
+              args:
+                prefer: A
+          - plugin:
+              tag: cache
+              args:
+                store: true
+          - return: true
+
+      - match_and:
+          - plugin:
+              tag: geosite
+              args:
+                code: cn
+        exec:
+          - upstream: ali-dns
+          - plugin:
+              tag: cache
+              args:
+                store: true
+          - return: true
+
+      - exec:
+          - plugin:
+              tag: final
+          - plugin:
+              tag: cache
+              args:
+                store: true
+
+listeners:
+  - tag: local-udp
+    type: udp
+    listen: :1053
+    workflow: main
+
+  - tag: local-tcp
+    type: tcp
+    listen: :1053
+    workflow: main

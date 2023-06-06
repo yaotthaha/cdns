@@ -20,10 +20,6 @@ type contextLogger struct {
 }
 
 func AddContextTag(ctx context.Context) context.Context {
-	v := ctx.Value((*contextTag)(nil))
-	if v != nil {
-		return ctx
-	}
 	return context.WithValue(ctx, (*contextTag)(nil), &contextMsg{tag: tools.RandomNumStr(8), start: time.Now()})
 }
 
