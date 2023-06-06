@@ -3,7 +3,6 @@ module github.com/yaotthaha/cdns
 go 1.20
 
 require (
-	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-chi/chi v1.5.4
 	github.com/miekg/dns v1.1.54
 	github.com/oschwald/maxminddb-golang v1.10.0
