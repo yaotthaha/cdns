@@ -30,7 +30,7 @@ func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
 		for _, mItem := range options.MatchOr {
 			m, err := newMatchItem(core, mItem, modeOr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("init matcher_or rule fail, module: match_or: %s", err)
 			}
 			matchers = append(matchers, m)
 		}
@@ -39,7 +39,7 @@ func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
 		for _, eItem := range options.Exec {
 			e, err := newExecItem(core, eItem)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("init matcher_or rule fail, module: exec: %s", err)
 			}
 			execs = append(execs, e)
 		}
@@ -49,7 +49,7 @@ func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
 		for _, mItem := range options.MatchAnd {
 			m, err := newMatchItem(core, mItem, modeAnd)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("init matcher_and rule fail, module: match_and: %s", err)
 			}
 			matchers = append(matchers, m)
 		}
@@ -58,7 +58,7 @@ func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
 		for _, eItem := range options.Exec {
 			e, err := newExecItem(core, eItem)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("init matcher_and rule fail, module: exec: %s", err)
 			}
 			execs = append(execs, e)
 		}
@@ -68,13 +68,13 @@ func newRule(core adapter.Core, options workflow.Rule) (*Rule, error) {
 		for _, eItem := range options.Exec {
 			e, err := newExecItem(core, eItem)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("init exec rule fail: %s", err)
 			}
 			execs = append(execs, e)
 		}
 		r.execs = execs
 	default:
-		return nil, fmt.Errorf("unknown rule type: %T", options)
+		return nil, fmt.Errorf("init rule fail: unknown rule type: %T", options)
 	}
 	return r, nil
 }

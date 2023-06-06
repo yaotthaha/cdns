@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/yaotthaha/cdns/log"
@@ -14,7 +15,8 @@ type MatchPlugin interface {
 	Start() error
 	Close() error
 	WithContext(context.Context)
-	WithLogger(log.Logger)
+	WithLogger(log.ContextLogger)
+	APIHandler() http.Handler
 	Match(context.Context, map[string]any, *DNSContext) bool // true: match, false: no match
 }
 
@@ -24,7 +26,8 @@ type ExecPlugin interface {
 	Start() error
 	Close() error
 	WithContext(context.Context)
-	WithLogger(log.Logger)
+	WithLogger(log.ContextLogger)
+	APIHandler() http.Handler
 	Exec(context.Context, map[string]any, *DNSContext) bool // true: continue, false: stop
 }
 

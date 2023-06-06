@@ -5,9 +5,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
@@ -26,13 +29,12 @@ func init() {
 var _ adapter.MatchPlugin = (*Domain)(nil)
 
 type Domain struct {
-	tag      string
-	logger   log.ContextLogger
-	full     []string
-	suffix   []string
-	keyword  []string
-	regex    []*regexp.Regexp
-	fileList []string
+	tag        string
+	logger     log.ContextLogger
+	reloadLock sync.Mutex
+	insideRule atomic.Pointer[rule]
+	fileList   []string
+	fileRule   atomic.Pointer[rule]
 }
 
 type option struct {
@@ -57,36 +59,60 @@ func NewDomain(tag string, args map[string]any) (adapter.MatchPlugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse args fail: %s", err)
 	}
-	var hasRule bool
+	insideRule := &rule{}
+	var hasRule int
 	if op.Full != nil && len(op.Full) > 0 {
-		d.full = op.Full
-		hasRule = true
+		fulls := make([]string, len(op.Full))
+		for i, f := range op.Full {
+			fulls[i] = f
+		}
+		if len(fulls) > 0 {
+			insideRule.full = fulls
+			hasRule++
+		}
 	}
 	if op.Suffix != nil && len(op.Suffix) > 0 {
-		d.suffix = op.Suffix
-		hasRule = true
+		suffixs := make([]string, len(op.Suffix))
+		for i, f := range op.Suffix {
+			suffixs[i] = f
+		}
+		if len(suffixs) > 0 {
+			insideRule.suffix = suffixs
+			hasRule++
+		}
 	}
 	if op.Keyword != nil && len(op.Keyword) > 0 {
-		d.keyword = op.Keyword
-		hasRule = true
+		keywords := make([]string, len(op.Keyword))
+		for i, f := range op.Keyword {
+			keywords[i] = f
+		}
+		if len(keywords) > 0 {
+			insideRule.keyword = keywords
+			hasRule++
+		}
 	}
 	if op.Regex != nil && len(op.Regex) > 0 {
-		regexs := make([]*regexp.Regexp, 0, len(op.Regex))
+		regexs := make([]*regexp.Regexp, len(op.Regex))
 		for i, r := range op.Regex {
 			regex, err := regexp.Compile(r)
 			if err != nil {
-				return nil, fmt.Errorf("invalid regex: %s", err)
+				return nil, fmt.Errorf("parse keyword domain %s fail: %s", r, err)
 			}
 			regexs[i] = regex
 		}
-		d.regex = regexs
-		hasRule = true
+		if len(regexs) > 0 {
+			insideRule.regex = regexs
+			hasRule++
+		}
+	}
+	if hasRule > 0 {
+		d.insideRule.Store(insideRule)
 	}
 	if op.File != nil && len(op.File) > 0 {
 		d.fileList = op.File
-		hasRule = true
+		hasRule++
 	}
-	if !hasRule {
+	if hasRule == 0 {
 		return nil, fmt.Errorf("invalid args: no rule")
 	}
 	return d, nil
@@ -102,58 +128,37 @@ func (d *Domain) Type() string {
 
 func (d *Domain) Start() error {
 	if d.fileList != nil {
+		rules := make([]*rule, 0)
 		for _, filename := range d.fileList {
 			d.logger.Info(fmt.Sprintf("loading domain file: %s", filename))
 			ruleItem, err := readRules(filename)
 			if err != nil {
 				return err
 			}
-			if ruleItem.full != nil && len(ruleItem.full) > 0 {
-				if d.full == nil {
-					d.full = make([]string, 0)
-				}
-				d.full = append(d.full, ruleItem.full...)
-			}
-			if ruleItem.suffix != nil && len(ruleItem.suffix) > 0 {
-				if d.suffix == nil {
-					d.suffix = make([]string, 0)
-				}
-				d.suffix = append(d.suffix, ruleItem.suffix...)
-			}
-			if ruleItem.keyword != nil && len(ruleItem.keyword) > 0 {
-				if d.keyword == nil {
-					d.keyword = make([]string, 0)
-				}
-				d.keyword = append(d.keyword, ruleItem.keyword...)
-			}
-			if ruleItem.regex != nil && len(ruleItem.regex) > 0 {
-				if d.regex == nil {
-					d.regex = make([]*regexp.Regexp, 0)
-				}
-				d.regex = append(d.regex, ruleItem.regex...)
-			}
+			rules = append(rules, ruleItem)
 			d.logger.Info(fmt.Sprintf("load domain file: %s success", filename))
 		}
+		fileRule := mergeRule(rules...)
+		var (
+			fullN    int
+			suffixN  int
+			keywordN int
+			regexN   int
+		)
+		fullN, suffixN, keywordN, regexN = fileRule.length()
+		d.logger.Info(fmt.Sprintf("file domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
+		d.fileRule.Store(fileRule)
 	}
-	var (
-		fullN    int
-		suffixN  int
-		keywordN int
-		regexN   int
-	)
-	if d.full != nil {
-		fullN = len(d.full)
+	if insideRule := d.insideRule.Load(); insideRule != nil {
+		var (
+			fullN    int
+			suffixN  int
+			keywordN int
+			regexN   int
+		)
+		fullN, suffixN, keywordN, regexN = insideRule.length()
+		d.logger.Info(fmt.Sprintf("inside domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
 	}
-	if d.suffix != nil {
-		suffixN = len(d.suffix)
-	}
-	if d.keyword != nil {
-		keywordN = len(d.keyword)
-	}
-	if d.regex != nil {
-		regexN = len(d.regex)
-	}
-	d.logger.Info(fmt.Sprintf("domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
 	return nil
 }
 
@@ -164,64 +169,85 @@ func (d *Domain) Close() error {
 func (d *Domain) WithContext(ctx context.Context) {
 }
 
-func (d *Domain) WithLogger(logger log.Logger) {
-	d.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s/%s", PluginType, d.tag)))
+func (d *Domain) WithLogger(contextLogger log.ContextLogger) {
+	d.logger = contextLogger
+}
+
+func (d *Domain) APIHandler() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go d.reloadFileRule()
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (d *Domain) reloadFileRule() {
+	if !d.reloadLock.TryLock() {
+		return
+	}
+	defer d.reloadLock.Unlock()
+	d.logger.Info("reload file rule...")
+	if d.fileList != nil {
+		files := make([]*rule, 0)
+		for _, f := range d.fileList {
+			rule, err := readRules(f)
+			if err != nil {
+				d.logger.Error(fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
+				return
+			}
+			files = append(files, rule)
+		}
+		fileRule := mergeRule(files...)
+		var (
+			fullN    int
+			suffixN  int
+			keywordN int
+			regexN   int
+		)
+		fullN, suffixN, keywordN, regexN = fileRule.length()
+		d.logger.Info(fmt.Sprintf("file domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
+		d.fileRule.Store(fileRule)
+		d.logger.Info("reload file rule success")
+	} else {
+		d.logger.Info("no file to reload")
+	}
 }
 
 func (d *Domain) Match(ctx context.Context, m map[string]any, dnsCtx *adapter.DNSContext) bool {
-	if d.full != nil {
-		for _, domain := range d.full {
-			fqdn := dns.Fqdn(domain)
-			if dnsCtx.ReqMsg.Question[0].Name == fqdn {
-				d.logger.DebugContext(ctx, fmt.Sprintf("match domain_full ==> %s", domain))
-				return true
-			}
+	insideRule := d.insideRule.Load()
+	if insideRule != nil {
+		matchType, matchRule, match := insideRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)
+		if match {
+			d.logger.DebugContext(ctx, fmt.Sprintf("match %s ==> %s", matchType, matchRule))
+			return true
 		}
 	}
-	if d.suffix != nil {
-		for _, domain := range d.suffix {
-			fqdn := dns.Fqdn(domain)
-			if strings.HasSuffix(dnsCtx.ReqMsg.Question[0].Name, fqdn) {
-				d.logger.DebugContext(ctx, fmt.Sprintf("match domain_suffix ==> %s", domain))
-				return true
-			}
-		}
-	}
-	if d.keyword != nil {
-		for _, domain := range d.keyword {
-			fqdn := dns.Fqdn(domain)
-			if strings.Contains(dnsCtx.ReqMsg.Question[0].Name, fqdn) {
-				d.logger.DebugContext(ctx, fmt.Sprintf("match domain_keyword ==> %s", domain))
-				return true
-			}
-		}
-	}
-	if d.regex != nil {
-		for _, regex := range d.regex {
-			if regex.MatchString(dnsCtx.ReqMsg.Question[0].Name) {
-				d.logger.DebugContext(ctx, fmt.Sprintf("match domain_regex ==> %s", regex.String()))
-				return true
-			}
+	fileRule := d.fileRule.Load()
+	if fileRule != nil {
+		matchType, matchRule, match := fileRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)
+		if match {
+			d.logger.DebugContext(ctx, fmt.Sprintf("match %s ==> %s", matchType, matchRule))
+			return true
 		}
 	}
 	return false
 }
 
-type ruleItem struct {
+type rule struct {
 	full    []string
 	suffix  []string
 	keyword []string
 	regex   []*regexp.Regexp
 }
 
-func readRules(filename string) (*ruleItem, error) {
+func readRules(filename string) (*rule, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 	reader := bytes.NewReader(content)
 	scanner := bufio.NewScanner(reader)
-	ruleItem := &ruleItem{}
+	ruleItem := &rule{}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) == 0 {
@@ -248,4 +274,100 @@ func readRules(filename string) (*ruleItem, error) {
 		}
 	}
 	return ruleItem, nil
+}
+
+func mergeRule(rules ...*rule) *rule {
+	merge := &rule{}
+	for _, r := range rules {
+		if r.full != nil {
+			merge.full = append(merge.full, r.full...)
+		}
+		if r.suffix != nil {
+			merge.suffix = append(merge.suffix, r.suffix...)
+		}
+		if r.keyword != nil {
+			merge.keyword = append(merge.keyword, r.keyword...)
+		}
+		if r.regex != nil {
+			merge.regex = append(merge.regex, r.regex...)
+		}
+	}
+	return merge
+}
+
+func (r *rule) match(ctx context.Context, matchDomain string) (string, string, bool) {
+	if r.full != nil {
+		for _, domain := range r.full {
+			select {
+			case <-ctx.Done():
+				return "", "", false
+			default:
+			}
+			fqdn := dns.Fqdn(domain)
+			if matchDomain == fqdn {
+				return "domain_full", domain, true
+			}
+		}
+	}
+	if r.suffix != nil {
+		for _, domain := range r.suffix {
+			select {
+			case <-ctx.Done():
+				return "", "", false
+			default:
+			}
+			fqdn := dns.Fqdn(domain)
+			if strings.HasSuffix(matchDomain, fqdn) {
+				return "domain_suffix", domain, true
+			}
+		}
+	}
+	if r.keyword != nil {
+		for _, domain := range r.keyword {
+			select {
+			case <-ctx.Done():
+				return "", "", false
+			default:
+			}
+			fqdn := dns.Fqdn(domain)
+			if strings.Contains(matchDomain, fqdn) {
+				return "domain_keyword", domain, true
+			}
+		}
+	}
+	if r.regex != nil {
+		for _, regex := range r.regex {
+			select {
+			case <-ctx.Done():
+				return "", "", false
+			default:
+			}
+			if regex.MatchString(matchDomain) {
+				return "domain_regex", regex.String(), true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func (r *rule) length() (int, int, int, int) {
+	var (
+		fullN    int
+		suffixN  int
+		keywordN int
+		regexN   int
+	)
+	if r.full != nil {
+		fullN = len(r.full)
+	}
+	if r.suffix != nil {
+		suffixN = len(r.suffix)
+	}
+	if r.keyword != nil {
+		keywordN = len(r.keyword)
+	}
+	if r.regex != nil {
+		regexN = len(r.regex)
+	}
+	return fullN, suffixN, keywordN, regexN
 }

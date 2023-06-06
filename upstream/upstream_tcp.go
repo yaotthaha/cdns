@@ -30,11 +30,22 @@ var _ adapter.Upstream = (*tcpUpstream)(nil)
 
 func NewTCPUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &tcpUpstream{
-		ctx:     ctx,
-		tag:     options.Tag,
-		logger:  log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamTCP, options.Tag))),
-		address: options.TCPOption.Address,
+		ctx:    ctx,
+		tag:    options.Tag,
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
+	if options.TCPOption.Address == "" {
+		return nil, fmt.Errorf("create tcp upstream fail: address is empty")
+	}
+	ip, err := netip.ParseAddr(options.TCPOption.Address)
+	if err == nil {
+		options.TCPOption.Address = net.JoinHostPort(ip.String(), "53")
+	}
+	address, err := netip.ParseAddrPort(options.TCPOption.Address)
+	if err != nil || !address.IsValid() {
+		return nil, fmt.Errorf("create tcp upstream fail: parse address fail: %s", err)
+	}
+	u.address = address
 	if options.TCPOption.IdleTimeout > 0 {
 		u.idleTimeout = time.Duration(options.TCPOption.IdleTimeout)
 	} else {
@@ -42,7 +53,7 @@ func NewTCPUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 	}
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
-		return nil, fmt.Errorf("create tcp upstream: %s", err)
+		return nil, fmt.Errorf("create tcp upstream fail: create dialer fail: %s", err)
 	}
 	u.dialer = dialer
 	return u, nil

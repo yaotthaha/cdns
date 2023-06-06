@@ -10,6 +10,7 @@ import (
 
 type Option struct {
 	LogOption          LogOption                       `yaml:"log"`
+	APIOption          APIOption                       `yaml:"api"`
 	UpstreamOptions    []upstream.UpstreamOption       `yaml:"upstreams"`
 	MatchPluginOptions []matchPlugin.MatchPluginOption `yaml:"match_plugins"`
 	ExecPluginOptions  []execPlugin.ExecPluginOption   `yaml:"exec_plugins"`

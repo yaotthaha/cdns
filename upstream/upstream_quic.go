@@ -37,14 +37,25 @@ var _ adapter.Upstream = (*quicUpstream)(nil)
 
 func NewQUICUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &quicUpstream{
-		ctx:     ctx,
-		tag:     options.Tag,
-		logger:  log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamQUIC, options.Tag))),
-		address: options.QUICOption.Address,
+		ctx:    ctx,
+		tag:    options.Tag,
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
+	if options.QUICOption.Address == "" {
+		return nil, fmt.Errorf("create quic upstream fail: address is empty")
+	}
+	ip, err := netip.ParseAddr(options.QUICOption.Address)
+	if err == nil {
+		options.QUICOption.Address = net.JoinHostPort(ip.String(), "784")
+	}
+	address, err := netip.ParseAddrPort(options.QUICOption.Address)
+	if err != nil || !address.IsValid() {
+		return nil, fmt.Errorf("create quic upstream fail: parse address fail: %s", err)
+	}
+	u.address = address
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
-		return nil, fmt.Errorf("create tcp upstream: %s", err)
+		return nil, fmt.Errorf("create quic upstream fail: create dialer fail: %s", err)
 	}
 	u.dialer = dialer
 	tlsConfig := &tls.Config{
@@ -56,24 +67,24 @@ func NewQUICUpstream(ctx context.Context, logger log.Logger, options upstream.Up
 		tlsConfig.ServerName = u.address.Addr().String()
 	}
 	if options.QUICOption.ClientCertFile != "" && options.QUICOption.ClientKeyFile == "" {
-		return nil, fmt.Errorf("create quic upstream: client_key_file not found")
+		return nil, fmt.Errorf("create quic upstream fail: client_key_file not found")
 	} else if options.QUICOption.ClientCertFile == "" && options.QUICOption.ClientKeyFile != "" {
-		return nil, fmt.Errorf("create quic upstream: client_cert_file not found")
+		return nil, fmt.Errorf("create quic upstream fail: client_cert_file not found")
 	} else if options.QUICOption.ClientCertFile != "" && options.QUICOption.ClientKeyFile != "" {
 		keyPair, err := tls.LoadX509KeyPair(options.QUICOption.ClientCertFile, options.QUICOption.ClientKeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("create quic upstream: load x509 key pair fail: %s", err)
+			return nil, fmt.Errorf("create quic upstream fail: load x509 key pair fail: %s", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{keyPair}
 	}
 	if options.QUICOption.CAFile != "" {
 		caContent, err := os.ReadFile(options.QUICOption.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("create quic upstream: load ca fail: %s", err)
+			return nil, fmt.Errorf("create quic upstream fail: load ca fail: %s", err)
 		}
 		tlsConfig.RootCAs = x509.NewCertPool()
 		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create quic upstream: append ca fail")
+			return nil, fmt.Errorf("create quic upstream fail: append ca fail")
 		}
 	}
 	u.tlsConfig = tlsConfig

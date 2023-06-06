@@ -3,6 +3,7 @@ package prefer
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
@@ -52,8 +53,12 @@ func (p *Prefer) WithContext(ctx context.Context) {
 	p.ctx = ctx
 }
 
-func (p *Prefer) WithLogger(logger log.Logger) {
-	p.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s/%s", PluginType, p.tag)))
+func (p *Prefer) WithLogger(contextLogger log.ContextLogger) {
+	p.logger = contextLogger
+}
+
+func (p *Prefer) APIHandler() http.Handler {
+	return nil
 }
 
 func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

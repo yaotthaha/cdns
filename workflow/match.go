@@ -3,22 +3,22 @@ package workflow
 import (
 	"context"
 	"fmt"
-
 	"github.com/yaotthaha/cdns/adapter"
-	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
+	"net/netip"
 
 	"github.com/miekg/dns"
 )
 
 type matchItem struct {
 	mode       string
-	clientIP   []*types.Addr
+	listener   []string
+	clientIP   []any
 	qType      []uint16
 	qName      []string
 	hasRespMsg *bool
-	respIP     []*types.Addr
+	respIP     []any
 	mark       []uint64
 	plugin     *matchPlugin
 	matchOr    []*matchItem
@@ -36,44 +36,79 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem, mode string
 		mode:   mode,
 		invert: options.Invert,
 	}
+	rn := 0
+
+	if options.Listener != nil && len(options.Listener) > 0 {
+		rItem.listener = make([]string, len(options.Listener))
+		for i, listener := range options.Listener {
+			rItem.listener[i] = listener
+		}
+		rn++
+	}
 
 	if options.ClientIP != nil && len(options.ClientIP) > 0 {
-		rItem.clientIP = make([]*types.Addr, 0, len(options.ClientIP))
-		for i, ip := range options.ClientIP {
-			rItem.clientIP[i] = ip
+		rItem.clientIP = make([]any, len(options.ClientIP))
+		for i, addrStr := range options.ClientIP {
+			ip, err := netip.ParseAddr(addrStr)
+			if err == nil {
+				rItem.clientIP[i] = ip
+				continue
+			}
+			cidr, err := netip.ParsePrefix(addrStr)
+			if err == nil {
+				rItem.clientIP = append(rItem.clientIP, cidr)
+				continue
+			}
+			return nil, fmt.Errorf("invalid client_ip %s", addrStr)
 		}
+		rn++
 	}
 
 	if options.QType != nil && len(options.QType) > 0 {
-		rItem.qType = make([]uint16, 0, len(options.QType))
+		rItem.qType = make([]uint16, len(options.QType))
 		for i, qType := range options.QType {
 			rItem.qType[i] = uint16(qType)
 		}
+		rn++
 	}
 
 	if options.QName != nil && len(options.QName) > 0 {
-		rItem.qName = make([]string, 0, len(options.QName))
+		rItem.qName = make([]string, len(options.QName))
 		for i, qName := range options.QName {
 			rItem.qName[i] = qName
 		}
+		rn++
 	}
 
 	if options.HasRespMsg != nil {
 		rItem.hasRespMsg = options.HasRespMsg
+		rn++
 	}
 
 	if options.RespIP != nil && len(options.RespIP) > 0 {
-		rItem.respIP = make([]*types.Addr, 0, len(options.RespIP))
-		for i, respIP := range options.RespIP {
-			rItem.respIP[i] = respIP
+		rItem.respIP = make([]any, len(options.RespIP))
+		for i, addrStr := range options.RespIP {
+			ip, err := netip.ParseAddr(addrStr)
+			if err == nil {
+				rItem.respIP[i] = ip
+				continue
+			}
+			cidr, err := netip.ParsePrefix(addrStr)
+			if err == nil {
+				rItem.respIP[i] = cidr
+				continue
+			}
+			return nil, fmt.Errorf("invalid resp_ip %s", addrStr)
 		}
+		rn++
 	}
 
 	if options.Mark != nil && len(options.Mark) > 0 {
-		rItem.mark = make([]uint64, 0, len(options.Mark))
+		rItem.mark = make([]uint64, len(options.Mark))
 		for i, mark := range options.Mark {
 			rItem.mark[i] = mark
 		}
+		rn++
 	}
 
 	if options.Plugin != nil {
@@ -86,40 +121,62 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem, mode string
 			args:   options.Plugin.Args,
 		}
 		rItem.plugin = matchPlugin
+		rn++
 	}
 
 	if options.MatchOr != nil && len(options.MatchOr) > 0 {
-		matchOr := make([]*matchItem, 0, len(options.MatchOr))
+		matchOr := make([]*matchItem, len(options.MatchOr))
 		for i, mo := range options.MatchOr {
 			rule, err := newMatchItem(core, mo, modeOr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("invalid match_or: %+v, err: %s", mo, err)
 			}
 			matchOr[i] = rule
 		}
 		rItem.matchOr = matchOr
+		rn++
 	}
 
 	if options.MatchAnd != nil && len(options.MatchAnd) > 0 {
-		matchAnd := make([]*matchItem, 0, len(options.MatchAnd))
+		matchAnd := make([]*matchItem, len(options.MatchAnd))
 		for i, ma := range options.MatchAnd {
 			rule, err := newMatchItem(core, ma, modeAnd)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("invalid match_and: %+v, err: %s", ma, err)
 			}
 			matchAnd[i] = rule
 		}
 		rItem.matchAnd = matchAnd
+		rn++
+	}
+
+	if rn == 0 {
+		if mode == modeOr {
+			return nil, fmt.Errorf("invalid match_or: no rule")
+		} else if mode == modeAnd {
+			return nil, fmt.Errorf("invalid match_and: no rule")
+		} else {
+			return nil, fmt.Errorf("invalid rule: no rule")
+		}
+	}
+	if rn > 1 {
+		if mode == modeOr {
+			return nil, fmt.Errorf("invalid match_or: more than one rule")
+		} else if mode == modeAnd {
+			return nil, fmt.Errorf("invalid match_and: more than one rule")
+		} else {
+			return nil, fmt.Errorf("invalid rule: more than one rule")
+		}
 	}
 
 	return rItem, nil
 }
 
-func (r *matchItem) matchClientIP(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
-	if r.respIP != nil {
-		for _, cip := range r.clientIP {
-			if cip.Compare(dnsCtx.ClientIP.Addr()) == 0 {
-				logger.DebugContext(ctx, fmt.Sprintf("match: clientIP: %s", cip.String()))
+func matchListener(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
+	if r.listener != nil {
+		for _, l := range r.listener {
+			if l == dnsCtx.Listener {
+				logger.DebugContext(ctx, fmt.Sprintf("match: listener => %s", l))
 				return 1
 			}
 		}
@@ -128,11 +185,32 @@ func (r *matchItem) matchClientIP(ctx context.Context, logger log.ContextLogger,
 	return -1
 }
 
-func (r *matchItem) matchQType(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchClientIP(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
+	if r.respIP != nil {
+		for _, addrAny := range r.clientIP {
+			switch addr := addrAny.(type) {
+			case netip.Addr:
+				if addr.Compare(dnsCtx.ClientIP.Addr()) == 0 {
+					logger.DebugContext(ctx, fmt.Sprintf("match: client_ip => %s", addr.String()))
+					return 1
+				}
+			case netip.Prefix:
+				if addr.Contains(dnsCtx.ClientIP.Addr()) {
+					logger.DebugContext(ctx, fmt.Sprintf("match: client_ip => %s", addr.String()))
+					return 1
+				}
+			}
+		}
+		return 0
+	}
+	return -1
+}
+
+func matchQType(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.qType != nil {
 		for _, qType := range r.qType {
 			if qType == dnsCtx.ReqMsg.Question[0].Qtype {
-				logger.DebugContext(ctx, fmt.Sprintf("match: qType: %s", dns.TypeToString[qType]))
+				logger.DebugContext(ctx, fmt.Sprintf("match: qtype => %s", dns.TypeToString[qType]))
 				return 1
 			}
 		}
@@ -141,12 +219,12 @@ func (r *matchItem) matchQType(ctx context.Context, logger log.ContextLogger, dn
 	return -1
 }
 
-func (r *matchItem) matchQName(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchQName(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.qName != nil {
 		for _, qName := range r.qName {
 			qName = dns.Fqdn(qName)
 			if qName == dnsCtx.ReqMsg.Question[0].Name {
-				logger.DebugContext(ctx, fmt.Sprintf("match: qName: %s", qName))
+				logger.DebugContext(ctx, fmt.Sprintf("match: qname => %s", qName))
 				return 1
 			}
 		}
@@ -155,14 +233,14 @@ func (r *matchItem) matchQName(ctx context.Context, logger log.ContextLogger, dn
 	return -1
 }
 
-func (r *matchItem) matchHasRespMsg(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchHasRespMsg(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.hasRespMsg != nil {
 		if *r.hasRespMsg && dnsCtx.RespMsg != nil {
-			logger.DebugContext(ctx, fmt.Sprintf("match: hasRespMsg: %t", *r.hasRespMsg))
+			logger.DebugContext(ctx, fmt.Sprintf("match: hasRespMsg => %t", *r.hasRespMsg))
 			return 1
 		}
 		if !*r.hasRespMsg && dnsCtx.RespMsg == nil {
-			logger.DebugContext(ctx, fmt.Sprintf("match: hasRespMsg: %t", *r.hasRespMsg))
+			logger.DebugContext(ctx, fmt.Sprintf("match: hasRespMsg => %t", *r.hasRespMsg))
 			return 1
 		}
 		return 0
@@ -170,21 +248,45 @@ func (r *matchItem) matchHasRespMsg(ctx context.Context, logger log.ContextLogge
 	return -1
 }
 
-func (r *matchItem) matchRespIP(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchRespIP(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.respIP != nil && dnsCtx.RespMsg != nil {
 		return func() int {
-			for _, rip := range r.respIP {
+			for _, addrAny := range r.respIP {
 				for _, rr := range dnsCtx.RespMsg.Answer {
 					switch ans := rr.(type) {
 					case *dns.A:
-						if rip.String() == ans.A.String() {
-							logger.DebugContext(ctx, fmt.Sprintf("match: respIP: %s", rip.String()))
-							return 1
+						switch addr := addrAny.(type) {
+						case netip.Addr:
+							if addr.String() == ans.A.String() {
+								logger.DebugContext(ctx, fmt.Sprintf("match: resp_ip => %s", addr.String()))
+								return 1
+							}
+						case netip.Prefix:
+							ansIP, err := netip.ParseAddr(ans.A.String())
+							if err != nil {
+								continue
+							}
+							if addr.Contains(ansIP) {
+								logger.DebugContext(ctx, fmt.Sprintf("match: resp_ip => %s", addr.String()))
+								return 1
+							}
 						}
 					case *dns.AAAA:
-						if rip.String() == ans.AAAA.String() {
-							logger.DebugContext(ctx, fmt.Sprintf("match: respIP: %s", rip.String()))
-							return 1
+						switch addr := addrAny.(type) {
+						case netip.Addr:
+							if addr.String() == ans.AAAA.String() {
+								logger.DebugContext(ctx, fmt.Sprintf("match: resp_ip => %s", addr.String()))
+								return 1
+							}
+						case netip.Prefix:
+							ansIP, err := netip.ParseAddr(ans.AAAA.String())
+							if err != nil {
+								continue
+							}
+							if addr.Contains(ansIP) {
+								logger.DebugContext(ctx, fmt.Sprintf("match: resp_ip => %s", addr.String()))
+								return 1
+							}
 						}
 					}
 				}
@@ -195,11 +297,11 @@ func (r *matchItem) matchRespIP(ctx context.Context, logger log.ContextLogger, d
 	return -1
 }
 
-func (r *matchItem) matchMark(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.mark != nil && dnsCtx.Mark > 0 {
 		for _, mark := range r.mark {
 			if mark == dnsCtx.Mark {
-				logger.DebugContext(ctx, fmt.Sprintf("match: mark ==> %d", mark))
+				logger.DebugContext(ctx, fmt.Sprintf("match: mark => %d", mark))
 				return 1
 			}
 		}
@@ -208,7 +310,7 @@ func (r *matchItem) matchMark(ctx context.Context, logger log.ContextLogger, dns
 	return -1
 }
 
-func (r *matchItem) matchPlugin(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchPluginFunc(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.plugin != nil {
 		result := r.plugin.plugin.Match(ctx, r.plugin.args, dnsCtx)
 		if result {
@@ -220,11 +322,11 @@ func (r *matchItem) matchPlugin(ctx context.Context, logger log.ContextLogger, d
 	return -1
 }
 
-func (r *matchItem) matchMatchOr(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchMatchOr(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.matchOr != nil {
 		for _, mo := range r.matchOr {
 			if mo.match(ctx, logger, dnsCtx) {
-				logger.DebugContext(ctx, fmt.Sprintf("match: matchOr"))
+				logger.DebugContext(ctx, fmt.Sprintf("match: match_or => %+v", mo))
 				return 1
 			}
 		}
@@ -233,38 +335,39 @@ func (r *matchItem) matchMatchOr(ctx context.Context, logger log.ContextLogger, 
 	return -1
 }
 
-func (r *matchItem) matchMatchAnd(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
+func matchMatchAnd(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.matchAnd != nil {
 		for _, ma := range r.matchAnd {
 			if !ma.match(ctx, logger, dnsCtx) {
 				return 0
 			}
-			logger.DebugContext(ctx, fmt.Sprintf("match: matchAnd"))
+			logger.DebugContext(ctx, fmt.Sprintf("match: match_and => %+v", ma))
 		}
 		return 1
 	}
 	return -1
 }
 
-type matchItemFunc func(context.Context, log.ContextLogger, *adapter.DNSContext) int
+type matchItemFunc func(context.Context, log.ContextLogger, *matchItem, *adapter.DNSContext) int
 
-func (r *matchItem) matchItemFuncs() []matchItemFunc {
+func matchItemFuncs() []matchItemFunc {
 	return []matchItemFunc{
-		r.matchMark,
-		r.matchQType,
-		r.matchQName,
-		r.matchHasRespMsg,
-		r.matchRespIP,
-		r.matchPlugin,
-		r.matchMatchOr,
-		r.matchMatchAnd,
+		matchMark,
+		matchQType,
+		matchQName,
+		matchHasRespMsg,
+		matchListener,
+		matchRespIP,
+		matchPluginFunc,
+		matchMatchOr,
+		matchMatchAnd,
 	}
 }
 
 func (r *matchItem) matchAnd0(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
 	t := false
-	for _, f := range r.matchItemFuncs() {
-		result := f(ctx, logger, dnsCtx)
+	for _, f := range matchItemFuncs() {
+		result := f(ctx, logger, r, dnsCtx)
 		if result >= 0 {
 			switch {
 			case result == 1 && !r.invert:
@@ -287,8 +390,8 @@ func (r *matchItem) matchAnd0(ctx context.Context, logger log.ContextLogger, dns
 
 func (r *matchItem) matchOr0(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
 	t := false
-	for _, f := range r.matchItemFuncs() {
-		result := f(ctx, logger, dnsCtx)
+	for _, f := range matchItemFuncs() {
+		result := f(ctx, logger, r, dnsCtx)
 		if result >= 0 {
 			switch {
 			case result == 1 && !r.invert:

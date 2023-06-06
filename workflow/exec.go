@@ -32,13 +32,19 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 	eItem := &execItem{
 		core: core,
 	}
+	rn := 0
 
 	if options.Mark != nil {
 		eItem.setMark = options.Mark
+		rn++
 	}
 
 	if options.Upstream != nil {
+		if core.GetUpstream(*options.Upstream) == nil {
+			return nil, fmt.Errorf("upstream %s not found", *options.Upstream)
+		}
 		eItem.upstream = options.Upstream
+		rn++
 	}
 
 	if options.Plugin != nil {
@@ -51,10 +57,11 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 			args:   options.Plugin.Args,
 		}
 		eItem.plugin = execPlugin
+		rn++
 	}
 
 	if options.JumpTo != nil && len(*options.JumpTo) > 0 {
-		eItem.jumpTo = make([]string, 0, len(*options.JumpTo))
+		eItem.jumpTo = make([]string, len(*options.JumpTo))
 		for i, jumpTo := range *options.JumpTo {
 			w := core.GetWorkflow(jumpTo)
 			if w == nil {
@@ -62,6 +69,7 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 			}
 			eItem.jumpTo[i] = jumpTo
 		}
+		rn++
 	}
 
 	if options.GoTo != nil {
@@ -70,10 +78,19 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 			return nil, fmt.Errorf("workflow %s not found", *options.GoTo)
 		}
 		eItem.goTo = options.GoTo
+		rn++
 	}
 
 	if options.Return != nil {
 		eItem.reTurn = options.Return
+		rn++
+	}
+
+	if rn == 0 {
+		return nil, fmt.Errorf("invalid exec rule: no rule")
+	}
+	if rn > 1 {
+		return nil, fmt.Errorf("invalid exec rule: more than one rule")
 	}
 
 	return eItem, nil
@@ -104,7 +121,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 				logger.ErrorContext(ctx, fmt.Sprintf("workflow %s not found", j))
 				return false
 			}
-			logger.DebugContext(ctx, fmt.Sprintf("jump to %s", j))
+			logger.DebugContext(ctx, fmt.Sprintf("jump to => %s", j))
 			if !w.Exec(ctx, dnsCtx) {
 				return false
 			}
@@ -116,7 +133,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 			logger.ErrorContext(ctx, fmt.Sprintf("workflow %s not found", *e.goTo))
 			return false
 		}
-		logger.DebugContext(ctx, fmt.Sprintf("go to %s", *e.goTo))
+		logger.DebugContext(ctx, fmt.Sprintf("go to => %s", *e.goTo))
 		if !w.Exec(ctx, dnsCtx) {
 			return false
 		}

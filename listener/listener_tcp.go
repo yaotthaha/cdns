@@ -32,9 +32,24 @@ func NewTCPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s/%s", constant.ListenerTCP, options.Tag))),
 	}
-	l.listen = options.Listen
+	if options.Listen == "" {
+		options.Listen = ":53"
+	}
+	host, port, err := net.SplitHostPort(options.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("create tcp listener fail: parse listen %s fail: %s", options.Listen, err)
+	}
+	if host == "" {
+		host = "::"
+	}
+	options.Listen = net.JoinHostPort(host, port)
+	listenAddr, err := netip.ParseAddrPort(options.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("create tcp listener fail: parse listen %s fail: %s", options.Listen, err)
+	}
+	l.listen = listenAddr
 	if options.Workflow == "" {
-		return nil, fmt.Errorf("workflow is empty")
+		return nil, fmt.Errorf("create tcp listener fail: workflow is empty")
 	}
 	l.workflow = options.Workflow
 	return l, nil
@@ -51,13 +66,13 @@ func (l *tcpListener) Type() string {
 func (l *tcpListener) Start() error {
 	w := l.core.GetWorkflow(l.workflow)
 	if w == nil {
-		return fmt.Errorf("workflow %s not found", l.workflow)
+		return fmt.Errorf("start tcp listener fail: workflow %s not found", l.workflow)
 	}
 	var err error
 	listenConfig := &net.ListenConfig{}
 	l.tcpListener, err = listenConfig.Listen(l.ctx, constant.NetworkTCP, l.listen.String())
 	if err != nil {
-		return fmt.Errorf("listen %s fail: %s", l.listen.String(), err)
+		return fmt.Errorf("start tcp listener fail: listen %s fail: %s", l.listen.String(), err)
 	}
 	go l.listenHandler()
 	return nil
@@ -66,7 +81,7 @@ func (l *tcpListener) Start() error {
 func (l *tcpListener) Close() error {
 	err := l.tcpListener.Close()
 	if err != nil {
-		return fmt.Errorf("listener %s: close tcp listener fail: %s", l.tag, err)
+		return fmt.Errorf("close tcp listener fail: %s", err)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -29,12 +30,12 @@ type Cache struct {
 	tag          string
 	ctx          context.Context
 	logger       log.ContextLogger
+	cleanLock    sync.Mutex
 	maxSize      uint64
 	dumpFile     string
 	dumpInterval time.Duration
-
-	cacheMap atomic.Pointer[cachemap.CacheMap]
-	dumpLock sync.Mutex
+	cacheMap     atomic.Pointer[cachemap.CacheMap]
+	dumpLock     sync.Mutex
 }
 
 type option struct {
@@ -125,8 +126,30 @@ func (c *Cache) WithContext(ctx context.Context) {
 	c.ctx = ctx
 }
 
-func (c *Cache) WithLogger(logger log.Logger) {
-	c.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s/%s", PluginType, c.tag)))
+func (c *Cache) WithLogger(contextLogger log.ContextLogger) {
+	c.logger = contextLogger
+}
+
+func (c *Cache) APIHandler() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go c.cleanCache()
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (c *Cache) cleanCache() {
+	if !c.cleanLock.TryLock() {
+		return
+	}
+	defer c.cleanLock.Unlock()
+	c.logger.Info("clean cache...")
+	cacheMap := c.cacheMap.Load()
+	if cacheMap == nil {
+		return
+	}
+	cacheMap.CleanAll()
+	c.logger.Info("clean cache success")
 }
 
 func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

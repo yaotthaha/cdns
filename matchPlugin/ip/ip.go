@@ -5,9 +5,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"net/netip"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
@@ -26,12 +29,12 @@ func init() {
 var _ adapter.MatchPlugin = (*IP)(nil)
 
 type IP struct {
-	tag      string
-	logger   log.ContextLogger
-	fileList []string
-
-	ip   []netip.Addr
-	cidr []netip.Prefix
+	tag        string
+	logger     log.ContextLogger
+	reloadLock sync.Mutex
+	fileList   []string
+	insideRule atomic.Pointer[rule]
+	fileRule   atomic.Pointer[rule]
 }
 
 type option struct {
@@ -54,39 +57,44 @@ func NewIP(tag string, args map[string]any) (adapter.MatchPlugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse args fail: %s", err)
 	}
-
-	var haveRule bool
+	insideRule := &rule{}
+	var haveRule int
 	if op.IP != nil && len(op.IP) > 0 {
-		d.ip = make([]netip.Addr, 0)
+		ips := make([]netip.Addr, 0)
 		for _, ipStr := range op.IP {
 			ip, err := netip.ParseAddr(ipStr)
 			if err != nil {
 				return nil, fmt.Errorf("parse ip %s fail: %s", ipStr, err)
 			}
-			d.ip = append(d.ip, ip)
+			ips = append(ips, ip)
 		}
-		if len(d.ip) > 0 {
-			haveRule = true
+		if len(ips) > 0 {
+			insideRule.ip = ips
+			haveRule++
 		}
 	}
 	if op.CIDR != nil && len(op.CIDR) > 0 {
-		d.cidr = make([]netip.Prefix, 0)
+		cidrs := make([]netip.Prefix, 0)
 		for _, cidrStr := range op.CIDR {
 			cidr, err := netip.ParsePrefix(cidrStr)
 			if err != nil {
 				return nil, fmt.Errorf("parse cidr %s fail: %s", cidrStr, err)
 			}
-			d.cidr = append(d.cidr, cidr)
+			cidrs = append(cidrs, cidr)
 		}
-		if len(d.cidr) > 0 {
-			haveRule = true
+		if len(cidrs) > 0 {
+			insideRule.cidr = cidrs
+			haveRule++
 		}
+	}
+	if haveRule > 0 {
+		d.insideRule.Store(insideRule)
 	}
 	if op.File != nil && len(op.File) > 0 {
-		haveRule = true
+		haveRule++
 	}
 
-	if !haveRule {
+	if haveRule == 0 {
 		return nil, fmt.Errorf("no rules found")
 	}
 
@@ -103,38 +111,33 @@ func (i *IP) Type() string {
 
 func (i *IP) Start() error {
 	if i.fileList != nil {
+		rules := make([]*rule, 0)
 		for _, filename := range i.fileList {
-			i.logger.Info(fmt.Sprintf("loading domain file: %s", filename))
+			i.logger.Info(fmt.Sprintf("loading ip file: %s", filename))
 			ruleItem, err := readRules(filename)
 			if err != nil {
 				return err
 			}
-			if ruleItem.cidr != nil && len(ruleItem.cidr) > 0 {
-				if i.cidr == nil {
-					i.cidr = make([]netip.Prefix, 0)
-				}
-				i.cidr = append(i.cidr, ruleItem.cidr...)
-			}
-			if ruleItem.ip != nil && len(ruleItem.ip) > 0 {
-				if i.ip == nil {
-					i.ip = make([]netip.Addr, 0)
-				}
-				i.ip = append(i.ip, ruleItem.ip...)
-			}
-			i.logger.Info(fmt.Sprintf("load domain file: %s success", filename))
+			rules = append(rules, ruleItem)
+			i.logger.Info(fmt.Sprintf("load ip file: %s success", filename))
 		}
+		fileRule := mergeRule(rules...)
+		var (
+			ipN   int
+			cidrN int
+		)
+		ipN, cidrN = fileRule.length()
+		i.logger.Info(fmt.Sprintf("file ip rule: ip: %d, cidr: %d", ipN, cidrN))
+		i.fileRule.Store(fileRule)
 	}
-	var (
-		ipN   int
-		cidrN int
-	)
-	if i.ip != nil {
-		ipN = len(i.ip)
+	if insideRule := i.insideRule.Load(); insideRule != nil {
+		var (
+			ipN   int
+			cidrN int
+		)
+		ipN, cidrN = insideRule.length()
+		i.logger.Info(fmt.Sprintf("inside ip rule: ip: %d, cidr: %d", ipN, cidrN))
 	}
-	if i.cidr != nil {
-		cidrN = len(i.cidr)
-	}
-	i.logger.Info(fmt.Sprintf("domain rule: ip: %d, cidr: %d", ipN, cidrN))
 	return nil
 }
 
@@ -145,8 +148,46 @@ func (i *IP) Close() error {
 func (i *IP) WithContext(ctx context.Context) {
 }
 
-func (i *IP) WithLogger(logger log.Logger) {
-	i.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s/%s", PluginType, i.tag)))
+func (i *IP) WithLogger(contextLogger log.ContextLogger) {
+	i.logger = contextLogger
+}
+
+func (i *IP) APIHandler() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go i.reloadFileRule()
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (i *IP) reloadFileRule() {
+	if !i.reloadLock.TryLock() {
+		return
+	}
+	defer i.reloadLock.Unlock()
+	i.logger.Info("reload file rule...")
+	if i.fileList != nil {
+		files := make([]*rule, 0)
+		for _, f := range i.fileList {
+			rule, err := readRules(f)
+			if err != nil {
+				i.logger.Error(fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
+				return
+			}
+			files = append(files, rule)
+		}
+		fileRule := mergeRule(files...)
+		var (
+			ipN   int
+			cidrN int
+		)
+		ipN, cidrN = fileRule.length()
+		i.logger.Info(fmt.Sprintf("file ip rule: ip: %d, cidr: %d", ipN, cidrN))
+		i.fileRule.Store(fileRule)
+		i.logger.Info("reload file rule success")
+	} else {
+		i.logger.Info("no file to reload")
+	}
 }
 
 func (i *IP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
@@ -173,42 +214,38 @@ func (i *IP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNS
 	if len(respIP) == 0 {
 		return false
 	}
-	if i.ip != nil {
-		for _, ip := range respIP {
-			for _, ruleIP := range i.ip {
-				if ruleIP.Compare(ip) == 0 {
-					i.logger.DebugContext(ctx, fmt.Sprintf("match ip: %s", ip.String()))
-					return true
-				}
-			}
+	insideRule := i.insideRule.Load()
+	if insideRule != nil {
+		matchType, matchRule, match := insideRule.match(ctx, respIP)
+		if match {
+			i.logger.DebugContext(ctx, fmt.Sprintf("match %s: %s", matchType, matchRule))
+			return true
 		}
 	}
-	if i.cidr != nil {
-		for _, ip := range respIP {
-			for _, ruleCIDR := range i.cidr {
-				if ruleCIDR.Contains(ip) {
-					i.logger.DebugContext(ctx, fmt.Sprintf("match cidr: %s", ruleCIDR.String()))
-					return true
-				}
-			}
+	fileRule := i.fileRule.Load()
+	if fileRule != nil {
+		matchType, matchRule, match := fileRule.match(ctx, respIP)
+		if match {
+			i.logger.DebugContext(ctx, fmt.Sprintf("match %s: %s", matchType, matchRule))
+			return true
 		}
 	}
 	return false
 }
 
-type ruleItem struct {
+type rule struct {
 	ip   []netip.Addr
 	cidr []netip.Prefix
 }
 
-func readRules(filename string) (*ruleItem, error) {
+func readRules(filename string) (*rule, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 	reader := bytes.NewReader(content)
 	scanner := bufio.NewScanner(reader)
-	ruleItem := &ruleItem{}
+	ruleItem := &rule{}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) == 0 {
@@ -230,4 +267,69 @@ func readRules(filename string) (*ruleItem, error) {
 		return nil, fmt.Errorf("invalid rule: %s", line)
 	}
 	return ruleItem, nil
+}
+
+func mergeRule(rules ...*rule) *rule {
+	ruleItem := &rule{}
+	for _, r := range rules {
+		if r.ip != nil && len(r.ip) > 0 {
+			if ruleItem.ip == nil {
+				ruleItem.ip = make([]netip.Addr, 0)
+			}
+			ruleItem.ip = append(ruleItem.ip, r.ip...)
+		}
+		if r.cidr != nil && len(r.cidr) > 0 {
+			if ruleItem.cidr == nil {
+				ruleItem.cidr = make([]netip.Prefix, 0)
+			}
+			ruleItem.cidr = append(ruleItem.cidr, r.cidr...)
+		}
+	}
+	return ruleItem
+}
+
+func (r *rule) match(ctx context.Context, respIP []netip.Addr) (string, string, bool) {
+	if r.ip != nil {
+		for _, ip := range respIP {
+			for _, ruleIP := range r.ip {
+				select {
+				case <-ctx.Done():
+					return "", "", false
+				default:
+				}
+				if ruleIP.Compare(ip) == 0 {
+					return "ip", ruleIP.String(), true
+				}
+			}
+		}
+	}
+	if r.cidr != nil {
+		for _, ip := range respIP {
+			for _, ruleCIDR := range r.cidr {
+				select {
+				case <-ctx.Done():
+					return "", "", false
+				default:
+				}
+				if ruleCIDR.Contains(ip) {
+					return "cidr", ruleCIDR.String(), true
+				}
+			}
+		}
+	}
+	return "", "", false
+}
+
+func (r *rule) length() (int, int) {
+	var (
+		ipN   int
+		cidrN int
+	)
+	if r.ip != nil {
+		ipN = len(r.ip)
+	}
+	if r.cidr != nil {
+		cidrN = len(r.cidr)
+	}
+	return ipN, cidrN
 }

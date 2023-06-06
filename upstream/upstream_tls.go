@@ -34,11 +34,22 @@ var _ adapter.Upstream = (*tlsUpstream)(nil)
 
 func NewTLSUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &tlsUpstream{
-		ctx:     ctx,
-		tag:     options.Tag,
-		logger:  log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamTLS, options.Tag))),
-		address: options.TLSOption.Address,
+		ctx:    ctx,
+		tag:    options.Tag,
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
+	if options.TLSOption.Address == "" {
+		return nil, fmt.Errorf("create tls upstream fail: address is empty")
+	}
+	ip, err := netip.ParseAddr(options.TLSOption.Address)
+	if err == nil {
+		options.TLSOption.Address = net.JoinHostPort(ip.String(), "853")
+	}
+	address, err := netip.ParseAddrPort(options.TLSOption.Address)
+	if err != nil || !address.IsValid() {
+		return nil, fmt.Errorf("create tls upstream fail: parse address fail: %s", err)
+	}
+	u.address = address
 	if options.TLSOption.IdleTimeout > 0 {
 		u.idleTimeout = time.Duration(options.TLSOption.IdleTimeout)
 	} else {
@@ -46,7 +57,7 @@ func NewTLSUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 	}
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
-		return nil, fmt.Errorf("create tcp upstream: %s", err)
+		return nil, fmt.Errorf("create tls upstream fail: create dialer fail: %s", err)
 	}
 	u.dialer = dialer
 	tlsConfig := &tls.Config{
@@ -63,18 +74,18 @@ func NewTLSUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 	} else if options.TLSOption.ClientCertFile != "" && options.TLSOption.ClientKeyFile != "" {
 		keyPair, err := tls.LoadX509KeyPair(options.TLSOption.ClientCertFile, options.TLSOption.ClientKeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("create tls upstream: load x509 key pair fail: %s", err)
+			return nil, fmt.Errorf("create tls upstream fail: load x509 key pair fail: %s", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{keyPair}
 	}
 	if options.TLSOption.CAFile != "" {
 		caContent, err := os.ReadFile(options.TLSOption.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("create tls upstream: load ca fail: %s", err)
+			return nil, fmt.Errorf("create tls upstream fail: load ca fail: %s", err)
 		}
 		tlsConfig.RootCAs = x509.NewCertPool()
 		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create tls upstream: append ca fail")
+			return nil, fmt.Errorf("create tls upstream fail: append ca fail")
 		}
 	}
 	u.tlsConfig = tlsConfig

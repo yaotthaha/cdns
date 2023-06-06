@@ -27,11 +27,11 @@ var _ adapter.Upstream = (*randomUpstream)(nil)
 func NewRandomUpstream(logger log.Logger, core adapter.Core, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &randomUpstream{
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamRandom, options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 		core:   core,
 	}
 	if options.RandomOption.Upstreams == nil || len(options.RandomOption.Upstreams) == 0 {
-		return nil, fmt.Errorf("create random upstream: upstreams is empty")
+		return nil, fmt.Errorf("create random upstream fail: upstreams is empty")
 	}
 	u.upstreamTags = make([]string, 0)
 	for _, tag := range options.RandomOption.Upstreams {
@@ -53,7 +53,7 @@ func (u *randomUpstream) Start() error {
 	for _, tag := range u.upstreamTags {
 		up := u.core.GetUpstream(tag)
 		if up == nil {
-			return fmt.Errorf("start random upstream: upstream [%s] not found", tag)
+			return fmt.Errorf("start random upstream fail: upstream [%s] not found", tag)
 		}
 		u.upstreams = append(u.upstreams, up)
 	}
@@ -70,7 +70,7 @@ func (u *randomUpstream) ContextLogger() log.ContextLogger {
 
 func (u *randomUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	upstream := u.upstreams[r.Intn(len(u.upstreams))]
-	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", upstream.Tag()))
-	return upstream.Exchange(ctx, dnsMsg)
+	up := u.upstreams[r.Intn(len(u.upstreams))]
+	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
+	return up.Exchange(ctx, dnsMsg)
 }

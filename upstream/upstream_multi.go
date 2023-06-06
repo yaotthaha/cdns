@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -28,11 +29,11 @@ func NewMultiUpstream(ctx context.Context, logger log.Logger, core adapter.Core,
 	u := &multiUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamMulti, options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 		core:   core,
 	}
 	if options.MultiOption.Upstreams == nil || len(options.MultiOption.Upstreams) == 0 {
-		return nil, fmt.Errorf("create multi upstream: upstreams is empty")
+		return nil, fmt.Errorf("create multi upstream fail: upstreams is empty")
 	}
 	u.upstreamTags = make([]string, 0)
 	for _, tag := range options.MultiOption.Upstreams {
@@ -54,7 +55,7 @@ func (u *multiUpstream) Start() error {
 	for _, tag := range u.upstreamTags {
 		up := u.core.GetUpstream(tag)
 		if up == nil {
-			return fmt.Errorf("start multi upstream: upstream [%s] not found", tag)
+			return fmt.Errorf("start multi upstream fail: upstream [%s] not found", tag)
 		}
 		u.upstreams = append(u.upstreams, up)
 	}
@@ -74,7 +75,8 @@ func (u *multiUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg
 	resultChan := make(chan *dns.Msg, 1)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	for _, upstream := range u.upstreams {
+	u.logger.InfoContext(ctx, fmt.Sprintf("multi forward to [%s]", strings.Join(u.upstreamTags, ", ")))
+	for _, up := range u.upstreams {
 		wg.Add(1)
 		go func(upstream adapter.Upstream) {
 			defer wg.Done()
@@ -86,7 +88,7 @@ func (u *multiUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg
 				default:
 				}
 			}
-		}(upstream)
+		}(up)
 	}
 	var respMsg *dns.Msg
 	select {

@@ -30,11 +30,22 @@ var _ adapter.Upstream = (*udpUpstream)(nil)
 
 func NewUDPUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &udpUpstream{
-		ctx:     ctx,
-		tag:     options.Tag,
-		logger:  log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamUDP, options.Tag))),
-		address: options.UDPOption.Address,
+		ctx:    ctx,
+		tag:    options.Tag,
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
+	if options.UDPOption.Address == "" {
+		return nil, fmt.Errorf("create udp upstream fail: address is empty")
+	}
+	ip, err := netip.ParseAddr(options.UDPOption.Address)
+	if err == nil {
+		options.UDPOption.Address = net.JoinHostPort(ip.String(), "53")
+	}
+	address, err := netip.ParseAddrPort(options.UDPOption.Address)
+	if err != nil || !address.IsValid() {
+		return nil, fmt.Errorf("create udp upstream fail: parse address fail: %s", err)
+	}
+	u.address = address
 	if options.UDPOption.IdleTimeout > 0 {
 		u.idleTimeout = time.Duration(options.UDPOption.IdleTimeout)
 	} else {
@@ -42,7 +53,7 @@ func NewUDPUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 	}
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
-		return nil, fmt.Errorf("create udp upstream: %s", err)
+		return nil, fmt.Errorf("create udp upstream fail: create dialer fail: %s", err)
 	}
 	u.dialer = dialer
 	return u, nil

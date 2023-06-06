@@ -32,9 +32,24 @@ func NewUDPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s/%s", constant.ListenerUDP, options.Tag))),
 	}
-	l.listen = options.Listen
+	if options.Listen == "" {
+		options.Listen = ":53"
+	}
+	host, port, err := net.SplitHostPort(options.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("create udp listener fail: parse listen %s fail: %s", options.Listen, err)
+	}
+	if host == "" {
+		host = "::"
+	}
+	options.Listen = net.JoinHostPort(host, port)
+	listenAddr, err := netip.ParseAddrPort(options.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("create udp listener fail: parse listen %s fail: %s", options.Listen, err)
+	}
+	l.listen = listenAddr
 	if options.Workflow == "" {
-		return nil, fmt.Errorf("workflow is empty")
+		return nil, fmt.Errorf("create udp listener fail: workflow is empty")
 	}
 	l.workflow = options.Workflow
 	return l, nil
@@ -51,12 +66,12 @@ func (l *udpListener) Type() string {
 func (l *udpListener) Start() error {
 	w := l.core.GetWorkflow(l.workflow)
 	if w == nil {
-		return fmt.Errorf("workflow %s not found", l.workflow)
+		return fmt.Errorf("start udp listener fail: workflow %s not found", l.workflow)
 	}
 	var err error
 	l.udpConn, err = net.ListenPacket(constant.NetworkUDP, l.listen.String())
 	if err != nil {
-		return fmt.Errorf("listen %s fail: %s", l.listen.String(), err)
+		return fmt.Errorf("start udp listener fail: listen %s fail: %s", l.listen.String(), err)
 	}
 	go l.listenHandler()
 	return nil
@@ -65,7 +80,7 @@ func (l *udpListener) Start() error {
 func (l *udpListener) Close() error {
 	err := l.udpConn.Close()
 	if err != nil {
-		return fmt.Errorf("listener %s: close udp connection fail: %s", l.tag, err)
+		return fmt.Errorf("close udp listener fail: close udp connection fail: %s", err)
 	}
 	return nil
 }

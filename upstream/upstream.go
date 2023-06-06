@@ -29,7 +29,7 @@ func NewUpstream(ctx context.Context, core adapter.Core, logger log.Logger, opti
 	case constant.UpstreamMulti:
 		return NewMultiUpstream(ctx, logger, core, options)
 	default:
-		return nil, fmt.Errorf("unknown upstream type: %s", options.Type)
+		return nil, fmt.Errorf("upstream type %s not supported", options.Type)
 	}
 }
 

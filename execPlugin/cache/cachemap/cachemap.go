@@ -131,6 +131,12 @@ func (cm *CacheMap) Range(f func(key string, value any, deadline time.Time) bool
 	return true
 }
 
+func (cm *CacheMap) CleanAll() {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
+	cm.m = make(map[string]*item)
+}
+
 func (cm *CacheMap) Len() int {
 	cm.lock.RLock()
 	defer cm.lock.RUnlock()

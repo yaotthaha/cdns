@@ -22,11 +22,14 @@ func NewWorkflow(core adapter.Core, logger log.Logger, options workflow.Workflow
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("workflow/%s", options.Tag))),
 	}
+	if options.Rules == nil || len(options.Rules) == 0 {
+		return nil, fmt.Errorf("workflow has no rules")
+	}
 	w.rules = make([]*Rule, 0)
-	for _, r := range options.Rules {
-		ru, err := newRule(core, r)
+	for _, rule := range options.Rules {
+		ru, err := newRule(core, rule)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("init workflow rules fail: %s", err)
 		}
 		w.rules = append(w.rules, ru)
 	}

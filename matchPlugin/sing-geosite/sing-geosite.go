@@ -3,18 +3,16 @@ package sing_geosite
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/matchPlugin/sing-geosite/geosite"
+	"net/http"
+	"regexp"
+	"strings"
+	"sync"
+	"sync/atomic"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
 )
@@ -31,11 +29,10 @@ type SingGeoSite struct {
 	tag        string
 	ctx        context.Context
 	logger     log.ContextLogger
+	reloadLock sync.Mutex
 	file       string
-	autoReload bool
 	code       []string
-
-	codeMap atomic.Pointer[map[string]*domainItem]
+	codeMap    atomic.Pointer[map[string]*domainItem]
 }
 
 type domainItem struct {
@@ -98,9 +95,8 @@ func (d *domainItem) match(ctx context.Context, domain string) (string, string, 
 }
 
 type option struct {
-	File       string                 `yaml:"file"`
-	Code       types.Listable[string] `yaml:"code"`
-	AutoReload bool                   `yaml:"auto_reload"`
+	File string                 `yaml:"file"`
+	Code types.Listable[string] `yaml:"code"`
 }
 
 func NewSingGeoSite(tag string, args map[string]any) (adapter.MatchPlugin, error) {
@@ -122,7 +118,6 @@ func NewSingGeoSite(tag string, args map[string]any) (adapter.MatchPlugin, error
 		return nil, fmt.Errorf("file is empty")
 	}
 	c.file = op.File
-	c.autoReload = op.AutoReload
 	if op.Code != nil && len(op.Code) > 0 {
 		c.code = op.Code
 	}
@@ -143,11 +138,8 @@ func (s *SingGeoSite) Start() error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info(fmt.Sprintf("load geosite success: %d", len(codeMap)))
-	s.codeMap.Store(&codeMap)
-	if s.autoReload {
-		go s.inotifyReload()
-	}
+	s.logger.Info(fmt.Sprintf("load geosite success: %d", len(*codeMap)))
+	s.codeMap.Store(codeMap)
 	return nil
 }
 
@@ -159,8 +151,31 @@ func (s *SingGeoSite) WithContext(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *SingGeoSite) WithLogger(logger log.Logger) {
-	s.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s/%s", PluginType, s.tag)))
+func (s *SingGeoSite) WithLogger(contextLogger log.ContextLogger) {
+	s.logger = contextLogger
+}
+
+func (s *SingGeoSite) APIHandler() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go s.reloadGeoSite()
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (s *SingGeoSite) reloadGeoSite() {
+	if !s.reloadLock.TryLock() {
+		return
+	}
+	defer s.reloadLock.Unlock()
+	s.logger.Info("reload geosite...")
+	codeMap, err := s.loadGeoSite()
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("reload geosite fail: %s", err))
+		return
+	}
+	s.codeMap.Store(codeMap)
+	s.logger.Info("reload geosite success")
 }
 
 func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
@@ -180,7 +195,6 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 	if codeMap == nil {
 		return false
 	}
-
 	codeAnyListAny, ok := args["code"]
 	if ok {
 		codeAnyList, ok := codeAnyListAny.([]any)
@@ -242,7 +256,7 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 	return false
 }
 
-func (s *SingGeoSite) loadGeoSite() (map[string]*domainItem, error) {
+func (s *SingGeoSite) loadGeoSite() (*map[string]*domainItem, error) {
 	reader, codes, err := geosite.Open(s.file)
 	if err != nil {
 		return nil, fmt.Errorf("read geosite file fail: %s", err)
@@ -294,77 +308,5 @@ func (s *SingGeoSite) loadGeoSite() (map[string]*domainItem, error) {
 			return nil, fmt.Errorf("no geosite item found, code: %s", code)
 		}
 	}
-	return codeMap, nil
-}
-
-func (s *SingGeoSite) inotifyReload() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		s.logger.Fatal(fmt.Sprintf("create new file watcher fail: %s", err))
-	}
-	defer watcher.Close()
-	err = watcher.Add(s.file)
-	if err != nil {
-		s.logger.Fatal(fmt.Sprintf("add file %s to watcher fail: %s", s.file, err))
-	}
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-	reloadTag := atomic.Uint64{}
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case event := <-watcher.Events:
-				switch event.Op {
-				case fsnotify.Create:
-				case fsnotify.Write:
-				case fsnotify.Remove:
-					continue
-				case fsnotify.Rename:
-					continue
-				case fsnotify.Chmod:
-					continue
-				}
-				reloadTag.Add(1)
-			case <-s.ctx.Done():
-				return
-			}
-		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		oldTag := atomic.Uint64{}
-		for {
-			select {
-			case <-s.ctx.Done():
-				return
-			default:
-			}
-			select {
-			case <-ticker.C:
-				if r := reloadTag.Load(); r != 0 {
-					if oldTag.Swap(r) < r {
-						continue
-					}
-				} else {
-					continue
-				}
-				newCodeMap, err := s.loadGeoSite()
-				if err != nil {
-					s.logger.Error(fmt.Sprintf("reload geosite file %s fail: %s", s.file, err))
-					continue
-				}
-				s.codeMap.Store(&newCodeMap)
-				s.logger.Info("reload geosite success")
-				reloadTag.Store(0)
-				oldTag.Store(0)
-			case <-s.ctx.Done():
-				return
-			}
-		}
-	}()
-	wg.Wait()
+	return &codeMap, nil
 }

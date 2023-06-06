@@ -26,7 +26,7 @@ type simpleDialer struct {
 }
 
 func newNetDialer(options upstream.UpstreamDialerOption) (NetDialer, error) {
-	if options.Socks5Address.IsValid() {
+	if options.Socks5Address != nil {
 		return newSocks5Dialer(options)
 	} else {
 		return newSimpleDialer(options)
@@ -97,18 +97,22 @@ func newSimpleDialer(options upstream.UpstreamDialerOption) (*simpleDialer, erro
 			})
 		}
 	}
-	if options.BindIP.IsValid() {
+	if options.BindIP != "" {
+		bindIP, err := netip.ParseAddr(options.BindIP)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse bind_ip %s: %v", options.BindIP, err)
+		}
 		tcp4Dialer.LocalAddr = &net.TCPAddr{
-			IP: options.BindIP.AsSlice(),
+			IP: bindIP.AsSlice(),
 		}
 		tcp6Dialer.LocalAddr = &net.TCPAddr{
-			IP: options.BindIP.AsSlice(),
+			IP: bindIP.AsSlice(),
 		}
 		udp4Dialer.LocalAddr = &net.UDPAddr{
-			IP: options.BindIP.AsSlice(),
+			IP: bindIP.AsSlice(),
 		}
 		udp6Dialer.LocalAddr = &net.UDPAddr{
-			IP: options.BindIP.AsSlice(),
+			IP: bindIP.AsSlice(),
 		}
 	}
 	d := &simpleDialer{
@@ -166,7 +170,11 @@ func newSocks5Dialer(options upstream.UpstreamDialerOption) (NetDialer, error) {
 	if err != nil {
 		return nil, err
 	}
-	socks5 := socks.NewDialer("tcp", options.Socks5Address.String())
+	socks5Address, err := netip.ParseAddrPort(*options.Socks5Address)
+	if err != nil || !socks5Address.IsValid() {
+		return nil, fmt.Errorf("failed to parse socks5_address %s: %v", *options.Socks5Address, err)
+	}
+	socks5 := socks.NewDialer("tcp", socks5Address.String())
 	socks5.ProxyDial = simpleDialer.DialContext
 	if options.Socks5Username != "" && options.Socks5Password != "" {
 		up := socks.UsernamePassword{

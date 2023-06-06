@@ -40,17 +40,37 @@ var _ adapter.Upstream = (*httpsUpstream)(nil)
 
 func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
 	u := &httpsUpstream{
-		ctx:     ctx,
-		tag:     options.Tag,
-		logger:  log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s/%s", constant.UpstreamHTTPS, options.Tag))),
-		address: options.HTTPSOption.Address,
+		ctx:    ctx,
+		tag:    options.Tag,
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
+	if options.HTTPSOption.Address == "" {
+		return nil, fmt.Errorf("create https upstream fail: address is empty")
+	}
+	ip, err := netip.ParseAddr(options.HTTPSOption.Address)
+	if err == nil {
+		options.HTTPSOption.Address = net.JoinHostPort(ip.String(), "443")
+	}
+	address, err := netip.ParseAddrPort(options.HTTPSOption.Address)
+	if err != nil || !address.IsValid() {
+		return nil, fmt.Errorf("create https upstream fail: parse address fail: %s", err)
+	}
+	u.address = address
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
-		return nil, fmt.Errorf("create tcp upstream: %s", err)
+		return nil, fmt.Errorf("create https upstream fail: create dialer fail: %s", err)
 	}
 	u.dialer = dialer
-	u.url = (*url.URL)(options.HTTPSOption.URL)
+	if options.HTTPSOption.URL == "" {
+		return nil, fmt.Errorf("create https upstream fail: url is empty")
+	}
+	u.url, err = url.Parse(options.HTTPSOption.URL)
+	if err != nil {
+		return nil, fmt.Errorf("create https upstream fail: parse url fail: %s", err)
+	}
+	if u.url.Scheme != "https" {
+		return nil, fmt.Errorf("create https upstream fail: url scheme is not https")
+	}
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.HTTPSOption.InsecureSkipVerify,
 		ServerName:         options.HTTPSOption.ServerName,
@@ -60,24 +80,24 @@ func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.U
 		tlsConfig.ServerName = u.url.Hostname()
 	}
 	if options.HTTPSOption.ClientCertFile != "" && options.HTTPSOption.ClientKeyFile == "" {
-		return nil, fmt.Errorf("create https upstream: client_key_file not found")
+		return nil, fmt.Errorf("create https upstream fail: client_key_file not found")
 	} else if options.HTTPSOption.ClientCertFile == "" && options.HTTPSOption.ClientKeyFile != "" {
-		return nil, fmt.Errorf("create https upstream: client_cert_file not found")
+		return nil, fmt.Errorf("create https upstream fail: client_cert_file not found")
 	} else if options.HTTPSOption.ClientCertFile != "" && options.HTTPSOption.ClientKeyFile != "" {
 		keyPair, err := tls.LoadX509KeyPair(options.HTTPSOption.ClientCertFile, options.HTTPSOption.ClientKeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("create https upstream: load x509 key pair fail: %s", err)
+			return nil, fmt.Errorf("create https upstream fail: load x509 key pair fail: %s", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{keyPair}
 	}
 	if options.HTTPSOption.CAFile != "" {
 		caContent, err := os.ReadFile(options.HTTPSOption.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("create https upstream: load ca fail: %s", err)
+			return nil, fmt.Errorf("create https upstream fail: load ca fail: %s", err)
 		}
 		tlsConfig.RootCAs = x509.NewCertPool()
 		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create https upstream: append ca fail")
+			return nil, fmt.Errorf("create https upstream fail: append ca fail")
 		}
 	}
 	if options.HTTPSOption.Header != nil {

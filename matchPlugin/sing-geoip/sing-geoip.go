@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"sync"
 	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -23,12 +25,12 @@ func init() {
 }
 
 type SingGeoIP struct {
-	tag    string
-	ctx    context.Context
-	logger log.ContextLogger
-	file   string
-
-	reader atomic.Pointer[geoip.Reader]
+	tag        string
+	ctx        context.Context
+	logger     log.ContextLogger
+	reloadLock sync.Mutex
+	file       string
+	reader     atomic.Pointer[geoip.Reader]
 }
 
 type option struct {
@@ -84,8 +86,32 @@ func (s *SingGeoIP) WithContext(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *SingGeoIP) WithLogger(logger log.Logger) {
-	s.logger = log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s/%s", PluginType, s.tag)))
+func (s *SingGeoIP) WithLogger(contextLogger log.ContextLogger) {
+	s.logger = contextLogger
+}
+
+func (s *SingGeoIP) APIHandler() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go s.reloadGeoIP()
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (s *SingGeoIP) reloadGeoIP() {
+	if !s.reloadLock.TryLock() {
+		return
+	}
+	defer s.reloadLock.Unlock()
+	s.logger.Info("reload geoip...")
+	reader, codes, err := s.loadGeoIP()
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("reload geoip fail: %s", err))
+		return
+	}
+	s.logger.Info(fmt.Sprintf("reload geoip success: %d", len(codes)))
+	s.reader.Store(reader)
+	s.logger.Info("reload geoip success")
 }
 
 func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
@@ -106,11 +132,6 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 	if len(ips) == 0 {
 		return false
 	}
-	reader := s.reader.Load()
-	if reader == nil {
-		return false
-	}
-
 	codeAnyListAny, ok := args["code"]
 	if !ok {
 		s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
@@ -135,14 +156,17 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 			codeMap[codeItem] = true
 		}
 	}
-	for _, ip := range ips {
-		code := reader.Lookup(ip)
-		if code == "unknown" {
-			continue
-		}
-		if codeMap[code] {
-			s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geoip: %s", code))
-			return true
+	reader := s.reader.Load()
+	if reader != nil {
+		for _, ip := range ips {
+			code := reader.Lookup(ip)
+			if code == "unknown" {
+				continue
+			}
+			if codeMap[code] {
+				s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geoip: %s", code))
+				return true
+			}
 		}
 	}
 	return false
