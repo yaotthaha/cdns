@@ -3,12 +3,12 @@ package workflow_go
 import (
 	"context"
 	"fmt"
-	"github.com/yaotthaha/cdns/lib/types"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
 	"gopkg.in/yaml.v3"
