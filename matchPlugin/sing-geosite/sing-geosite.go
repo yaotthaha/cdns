@@ -3,6 +3,7 @@ package sing_geosite
 import (
 	"context"
 	"fmt"
+	"github.com/go-chi/chi"
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
@@ -156,11 +157,12 @@ func (s *SingGeoSite) WithLogger(contextLogger log.ContextLogger) {
 }
 
 func (s *SingGeoSite) APIHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go s.reloadGeoSite()
-	}
-	return http.HandlerFunc(fn)
+	})
+	return r
 }
 
 func (s *SingGeoSite) reloadGeoSite() {

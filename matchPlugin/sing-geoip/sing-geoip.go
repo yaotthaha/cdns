@@ -3,6 +3,7 @@ package sing_geoip
 import (
 	"context"
 	"fmt"
+	"github.com/go-chi/chi"
 	"net"
 	"net/http"
 	"sync"
@@ -91,11 +92,12 @@ func (s *SingGeoIP) WithLogger(contextLogger log.ContextLogger) {
 }
 
 func (s *SingGeoIP) APIHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go s.reloadGeoIP()
-	}
-	return http.HandlerFunc(fn)
+	})
+	return r
 }
 
 func (s *SingGeoIP) reloadGeoIP() {

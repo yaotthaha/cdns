@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/go-chi/chi"
 	"net/http"
 	"net/netip"
 	"os"
@@ -145,7 +146,7 @@ func (i *IP) Close() error {
 	return nil
 }
 
-func (i *IP) WithContext(ctx context.Context) {
+func (i *IP) WithContext(_ context.Context) {
 }
 
 func (i *IP) WithLogger(contextLogger log.ContextLogger) {
@@ -153,11 +154,12 @@ func (i *IP) WithLogger(contextLogger log.ContextLogger) {
 }
 
 func (i *IP) APIHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go i.reloadFileRule()
-	}
-	return http.HandlerFunc(fn)
+	})
+	return r
 }
 
 func (i *IP) reloadFileRule() {
@@ -190,7 +192,7 @@ func (i *IP) reloadFileRule() {
 	}
 }
 
-func (i *IP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
 	if dnsCtx.RespMsg == nil {
 		return false
 	}
@@ -251,6 +253,7 @@ func readRules(filename string) (*rule, error) {
 		if len(line) == 0 {
 			continue
 		}
+		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") {
 			continue
 		}

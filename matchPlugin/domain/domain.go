@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/go-chi/chi"
 	"net/http"
 	"os"
 	"regexp"
@@ -166,7 +167,7 @@ func (d *Domain) Close() error {
 	return nil
 }
 
-func (d *Domain) WithContext(ctx context.Context) {
+func (d *Domain) WithContext(_ context.Context) {
 }
 
 func (d *Domain) WithLogger(contextLogger log.ContextLogger) {
@@ -174,11 +175,12 @@ func (d *Domain) WithLogger(contextLogger log.ContextLogger) {
 }
 
 func (d *Domain) APIHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go d.reloadFileRule()
-	}
-	return http.HandlerFunc(fn)
+	})
+	return r
 }
 
 func (d *Domain) reloadFileRule() {
@@ -213,7 +215,7 @@ func (d *Domain) reloadFileRule() {
 	}
 }
 
-func (d *Domain) Match(ctx context.Context, m map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (d *Domain) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
 	insideRule := d.insideRule.Load()
 	if insideRule != nil {
 		matchType, matchRule, match := insideRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)
@@ -253,6 +255,7 @@ func readRules(filename string) (*rule, error) {
 		if len(line) == 0 {
 			continue
 		}
+		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
