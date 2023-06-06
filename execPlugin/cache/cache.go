@@ -14,6 +14,7 @@ import (
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
+	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
 )
@@ -131,11 +132,19 @@ func (c *Cache) WithLogger(contextLogger log.ContextLogger) {
 }
 
 func (c *Cache) APIHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	r := chi.NewRouter()
+	r.Get("/clean", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go c.cleanCache()
-	}
-	return http.HandlerFunc(fn)
+	})
+	r.Get("/save", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go c.saveToFileAPI()
+	})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	return r
 }
 
 func (c *Cache) cleanCache() {
@@ -143,13 +152,30 @@ func (c *Cache) cleanCache() {
 		return
 	}
 	defer c.cleanLock.Unlock()
+	startTime := time.Now()
 	c.logger.Info("clean cache...")
 	cacheMap := c.cacheMap.Load()
 	if cacheMap == nil {
 		return
 	}
 	cacheMap.CleanAll()
-	c.logger.Info("clean cache success")
+	c.logger.Info("clean cache success, cost: %s", time.Since(startTime).String())
+}
+
+func (c *Cache) saveToFileAPI() {
+	if !c.dumpLock.TryLock() {
+		return
+	}
+	defer c.dumpLock.Unlock()
+	startTime := time.Now()
+	c.logger.Info("save cache to file...")
+	cacheMap := c.cacheMap.Load()
+	err := c.saveToFile(cacheMap)
+	if err != nil {
+		c.logger.Error(err.Error())
+		return
+	}
+	c.logger.Info("save cache to file success, cost: %s", time.Since(startTime).String())
 }
 
 func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

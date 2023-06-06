@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
@@ -167,6 +168,7 @@ func (i *IP) reloadFileRule() {
 		return
 	}
 	defer i.reloadLock.Unlock()
+	startTime := time.Now()
 	i.logger.Info("reload file rule...")
 	if i.fileList != nil {
 		files := make([]*rule, 0)
@@ -186,7 +188,7 @@ func (i *IP) reloadFileRule() {
 		ipN, cidrN = fileRule.length()
 		i.logger.Info(fmt.Sprintf("file ip rule: ip: %d, cidr: %d", ipN, cidrN))
 		i.fileRule.Store(fileRule)
-		i.logger.Info("reload file rule success")
+		i.logger.Info("reload file rule success, cost: %s", time.Since(startTime).String())
 	} else {
 		i.logger.Info("no file to reload")
 	}

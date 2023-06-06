@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
@@ -163,6 +164,9 @@ func (s *SingGeoSite) APIHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 		go s.reloadGeoSite()
 	})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
 	return r
 }
 
@@ -171,6 +175,7 @@ func (s *SingGeoSite) reloadGeoSite() {
 		return
 	}
 	defer s.reloadLock.Unlock()
+	startTime := time.Now()
 	s.logger.Info("reload geosite...")
 	codeMap, err := s.loadGeoSite()
 	if err != nil {
@@ -178,7 +183,7 @@ func (s *SingGeoSite) reloadGeoSite() {
 		return
 	}
 	s.codeMap.Store(codeMap)
-	s.logger.Info("reload geosite success")
+	s.logger.Info(fmt.Sprintf("reload geosite success, cost: %s", time.Since(startTime).String()))
 }
 
 func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

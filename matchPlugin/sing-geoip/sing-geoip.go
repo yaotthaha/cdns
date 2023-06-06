@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
@@ -97,6 +98,9 @@ func (s *SingGeoIP) APIHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 		go s.reloadGeoIP()
 	})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
 	return r
 }
 
@@ -105,15 +109,15 @@ func (s *SingGeoIP) reloadGeoIP() {
 		return
 	}
 	defer s.reloadLock.Unlock()
+	startTime := time.Now()
 	s.logger.Info("reload geoip...")
 	reader, codes, err := s.loadGeoIP()
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("reload geoip fail: %s", err))
 		return
 	}
-	s.logger.Info(fmt.Sprintf("reload geoip success: %d", len(codes)))
 	s.reader.Store(reader)
-	s.logger.Info("reload geoip success")
+	s.logger.Info(fmt.Sprintf("reload geoip success: %d, cost: %s", len(codes), time.Since(startTime).String()))
 }
 
 func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

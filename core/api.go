@@ -17,15 +17,13 @@ import (
 )
 
 type APIServer struct {
-	ctx               context.Context
-	logger            log.Logger
-	debug             bool
-	secret            string
-	listen            netip.AddrPort
-	router            *chi.Mux
-	matchPluginRouter *chi.Mux
-	execPluginRouter  *chi.Mux
-	httpServer        *http.Server
+	ctx        context.Context
+	logger     log.Logger
+	debug      bool
+	secret     string
+	listen     netip.AddrPort
+	router     *chi.Mux
+	httpServer *http.Server
 }
 
 func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOption) (*APIServer, error) {
@@ -42,7 +40,10 @@ func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOpti
 	}
 	a.secret = options.Secret
 	a.debug = options.Debug
-	a.router = chi.NewRouter()
+	a.router = chi.NewMux()
+	a.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
 	a.httpServer = &http.Server{
 		Addr:    listenAddr.String(),
 		Handler: a.router,
@@ -57,14 +58,6 @@ func (a *APIServer) Start() error {
 			initGoDebugHTTPHandler(a.router)
 			task++
 		}
-		if a.matchPluginRouter != nil {
-			a.router.Mount("/plugin/match", a.matchPluginRouter)
-			task++
-		}
-		if a.execPluginRouter != nil {
-			a.router.Mount("/plugin/exec", a.execPluginRouter)
-			task++
-		}
 		if task > 0 {
 			go func() {
 				err := a.httpServer.ListenAndServe()
@@ -74,8 +67,6 @@ func (a *APIServer) Start() error {
 			}()
 			a.logger.Info(fmt.Sprintf("API server started at %s", a.httpServer.Addr))
 		} else {
-			a.matchPluginRouter = nil
-			a.execPluginRouter = nil
 			a.router = nil
 			a.httpServer = nil
 		}
@@ -95,25 +86,23 @@ func (a *APIServer) Close() error {
 }
 
 func (a *APIServer) MountMatchPlugin(plugin adapter.MatchPlugin) {
-	apiHandler := plugin.APIHandler()
-	if apiHandler == nil {
+	if plugin == nil || a.router == nil {
 		return
 	}
-	if a.matchPluginRouter == nil {
-		a.matchPluginRouter = chi.NewRouter()
+	apiHandler := plugin.APIHandler()
+	if apiHandler != nil {
+		a.router.Mount(fmt.Sprintf("/plugin/match/%s", plugin.Tag()), apiHandler)
 	}
-	a.matchPluginRouter.Mount(fmt.Sprintf("/%s", plugin.Tag()), apiHandler)
 }
 
 func (a *APIServer) MountExecPlugin(plugin adapter.ExecPlugin) {
-	apiHandler := plugin.APIHandler()
-	if apiHandler == nil {
+	if plugin == nil || a.router == nil {
 		return
 	}
-	if a.execPluginRouter == nil {
-		a.execPluginRouter = chi.NewRouter()
+	apiHandler := plugin.APIHandler()
+	if apiHandler != nil {
+		a.router.Mount(fmt.Sprintf("/plugin/exec/%s", plugin.Tag()), apiHandler)
 	}
-	a.execPluginRouter.Mount(fmt.Sprintf("/%s", plugin.Tag()), apiHandler)
 }
 
 func (a *APIServer) auth(next http.Handler) http.Handler {

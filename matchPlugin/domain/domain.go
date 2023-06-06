@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/types"
@@ -180,6 +181,9 @@ func (d *Domain) APIHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 		go d.reloadFileRule()
 	})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
 	return r
 }
 
@@ -188,6 +192,7 @@ func (d *Domain) reloadFileRule() {
 		return
 	}
 	defer d.reloadLock.Unlock()
+	startTime := time.Now()
 	d.logger.Info("reload file rule...")
 	if d.fileList != nil {
 		files := make([]*rule, 0)
@@ -209,7 +214,7 @@ func (d *Domain) reloadFileRule() {
 		fullN, suffixN, keywordN, regexN = fileRule.length()
 		d.logger.Info(fmt.Sprintf("file domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
 		d.fileRule.Store(fileRule)
-		d.logger.Info("reload file rule success")
+		d.logger.Info("reload file rule success, cost: %s", time.Since(startTime).String())
 	} else {
 		d.logger.Info("no file to reload")
 	}
