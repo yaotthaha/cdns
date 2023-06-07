@@ -24,6 +24,9 @@ type udpUpstream struct {
 	address     netip.AddrPort
 	idleTimeout time.Duration
 	connPool    *connpool.ConnPool
+	//
+	tcpIdleTimeout time.Duration
+	tcpConnPool    *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*udpUpstream)(nil)
@@ -51,6 +54,7 @@ func NewUDPUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 	} else {
 		u.idleTimeout = constant.UDPIdleTimeout
 	}
+	u.tcpIdleTimeout = constant.TCPIdleTimeout
 	dialer, err := newNetDialer(options.DialerOption)
 	if err != nil {
 		return nil, fmt.Errorf("create udp upstream fail: create dialer fail: %s", err)
@@ -80,10 +84,23 @@ func (u *udpUpstream) Start() error {
 		u.logger.Debug("close connection")
 	})
 	u.connPool = connPool
+	tcpConnPool := connpool.New(constant.MaxConn, u.tcpIdleTimeout, func() (net.Conn, error) {
+		conn, err := u.dialer.DialContext(u.ctx, constant.NetworkTCP, u.address.String())
+		if err != nil {
+			return nil, err
+		}
+		u.logger.Debug("open new tcp connection")
+		return conn, nil
+	})
+	tcpConnPool.SetPreCloseCall(func(conn net.Conn) {
+		u.logger.Debug("close tcp connection")
+	})
+	u.tcpConnPool = tcpConnPool
 	return nil
 }
 
 func (u *udpUpstream) Close() error {
+	u.tcpConnPool.Close()
 	u.connPool.Close()
 	return nil
 }
@@ -92,8 +109,7 @@ func (u *udpUpstream) ContextLogger() log.ContextLogger {
 	return u.logger
 }
 
-func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
-	u.logger.InfoContext(ctx, fmt.Sprintf("exchange dns: %s", logDNSMsg(dnsMsg)))
+func (u *udpUpstream) simpleExchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
 	u.logger.DebugContext(ctx, "get connection")
 	isClosed := false
 	conn, err := u.connPool.Get()
@@ -137,5 +153,64 @@ func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 	}
 	u.logger.DebugContext(ctx, "read dns message success")
 	dnsConn.SetDeadline(time.Time{})
+	return respMsg, nil
+}
+
+func (u *udpUpstream) tcpFallbackExchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
+	u.logger.DebugContext(ctx, "tcp fallback: get tcp connection")
+	isClosed := false
+	conn, err := u.tcpConnPool.Get()
+	if err != nil {
+		err = fmt.Errorf("tcp fallback: get tcp connection fail: %s", err)
+		u.logger.ErrorContext(ctx, err.Error())
+		return nil, err
+	}
+	u.logger.DebugContext(ctx, "tcp fallback: get tcp connection success")
+	dnsConn := &dns.Conn{Conn: conn}
+	defer func() {
+		if !isClosed {
+			err := u.connPool.Put(conn)
+			if err != nil {
+				u.logger.ErrorContext(ctx, fmt.Sprintf("tcp fallback: put tcp connection to pool fail: %s", err))
+			}
+		}
+	}()
+	u.logger.DebugContext(ctx, "tcp fallback: write dns message")
+	if deadline, ok := ctx.Deadline(); ok {
+		dnsConn.SetDeadline(deadline)
+	} else {
+		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
+	}
+	err = dnsConn.WriteMsg(dnsMsg)
+	if err != nil {
+		isClosed = true
+		conn.Close()
+		err = fmt.Errorf("tcp fallback: write dns message fail: %s", err)
+		u.logger.ErrorContext(ctx, err.Error())
+		return nil, err
+	}
+	u.logger.DebugContext(ctx, "tcp fallback: read dns message")
+	respMsg, err := dnsConn.ReadMsg()
+	if err != nil {
+		isClosed = true
+		conn.Close()
+		err = fmt.Errorf("tcp fallback: read dns message fail: %s", err)
+		u.logger.ErrorContext(ctx, err.Error())
+		return nil, err
+	}
+	u.logger.DebugContext(ctx, "tcp fallback: read dns message success")
+	dnsConn.SetDeadline(time.Time{})
+	return respMsg, nil
+}
+
+func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
+	u.logger.InfoContext(ctx, fmt.Sprintf("exchange dns: %s", logDNSMsg(dnsMsg)))
+	respMsg, err := u.simpleExchange(ctx, dnsMsg)
+	if err != nil {
+		return nil, err
+	}
+	if respMsg.Truncated {
+		return u.tcpFallbackExchange(ctx, dnsMsg)
+	}
 	return respMsg, nil
 }

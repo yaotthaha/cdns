@@ -141,9 +141,22 @@ func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	if respMsg == nil {
 		return
 	}
+	respMsg.Truncate(getUDPSize(reqMsg))
 	err := w.WriteMsg(respMsg)
 	if err != nil {
 		l.logger.ErrorContext(ctx, fmt.Sprintf("write msg fail: %s", err))
 		return
 	}
+}
+
+// from mosdns
+func getUDPSize(m *dns.Msg) int {
+	var s uint16
+	if opt := m.IsEdns0(); opt != nil {
+		s = opt.UDPSize()
+	}
+	if s < dns.MinMsgSize {
+		s = dns.MinMsgSize
+	}
+	return int(s)
 }

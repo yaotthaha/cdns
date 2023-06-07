@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-const Version = "v0.0.1-alpha-3"
+const Version = "v0.0.1-alpha-4"
 
 var Commit = ""
 
