@@ -21,5 +21,8 @@ func IsCloseOrCanceled(err error) bool {
 	if strings.Contains(err.Error(), "use of closed network connection") {
 		return true
 	}
+	if strings.Contains(err.Error(), "broken pipe") {
+		return true
+	}
 	return false
 }

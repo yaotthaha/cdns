@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
@@ -16,13 +18,15 @@ import (
 )
 
 type udpListener struct {
-	tag      string
-	ctx      context.Context
-	core     adapter.Core
-	logger   log.ContextLogger
-	listen   netip.AddrPort
-	workflow string
-	udpConn  net.PacketConn
+	tag              string
+	ctx              context.Context
+	core             adapter.Core
+	logger           log.ContextLogger
+	fatalStartCloser func(error)
+	listen           netip.AddrPort
+	workflow         string
+	udpConn          net.PacketConn
+	dnsServer        *dns.Server
 }
 
 func NewUDPListener(ctx context.Context, core adapter.Core, logger log.Logger, options listener.ListenerOptions) (adapter.Listener, error) {
@@ -63,6 +67,10 @@ func (l *udpListener) Type() string {
 	return constant.ListenerUDP
 }
 
+func (l *udpListener) WithFatalCloser(f func(err error)) {
+	l.fatalStartCloser = f
+}
+
 func (l *udpListener) Start() error {
 	w := l.core.GetWorkflow(l.workflow)
 	if w == nil {
@@ -73,14 +81,44 @@ func (l *udpListener) Start() error {
 	if err != nil {
 		return fmt.Errorf("start udp listener fail: listen %s fail: %s", l.listen.String(), err)
 	}
-	go l.listenHandler()
+	l.dnsServer = &dns.Server{
+		Net:          constant.NetworkUDP,
+		PacketConn:   l.udpConn,
+		Handler:      l,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+	waitLock := sync.Mutex{}
+	waitLock.Lock()
+	l.dnsServer.NotifyStartedFunc = waitLock.Unlock
+	go func() {
+		err := l.dnsServer.ActivateAndServe()
+		if err != nil {
+			if tools.IsCloseOrCanceled(err) {
+				return
+			}
+			if l.fatalStartCloser != nil {
+				l.fatalStartCloser(fmt.Errorf("start udp listener fail: %s", err))
+			}
+			l.logger.Fatal(fmt.Sprintf("start udp listener fail: %s", err))
+		}
+	}()
+	waitLock.Lock()
+	waitLock.Unlock()
 	return nil
 }
 
 func (l *udpListener) Close() error {
-	err := l.udpConn.Close()
+	err := l.dnsServer.Shutdown()
 	if err != nil {
-		return fmt.Errorf("close udp listener fail: close udp connection fail: %s", err)
+		return fmt.Errorf("close udp listener fail: shutdown udp server fail: %s", err)
+	}
+	err = l.udpConn.Close()
+	if err != nil {
+		if tools.IsCloseOrCanceled(err) {
+			return nil
+		}
+		return fmt.Errorf("close udp listener fail: %s", err)
 	}
 	return nil
 }
@@ -97,42 +135,15 @@ func (l *udpListener) GetWorkflow() adapter.Workflow {
 	return l.core.GetWorkflow(l.workflow)
 }
 
-func (l *udpListener) listenHandler() {
-	for {
-		select {
-		case <-l.ctx.Done():
-			return
-		default:
-		}
-		var buf [dns.MaxMsgSize]byte
-		n, remoteAddr, err := l.udpConn.ReadFrom(buf[:])
-		if err != nil {
-			if tools.IsCloseOrCanceled(err) {
-				return
-			}
-			l.logger.Error(fmt.Sprintf("read fail: %s", err))
-			continue
-		}
-		go l.dialHandler(buf[:n], remoteAddr)
-	}
-}
-
-func (l *udpListener) dialHandler(buf []byte, remoteAddr net.Addr) {
-	select {
-	case <-l.ctx.Done():
-		return
-	default:
-	}
-	ctx, respBytes := handler(l, buf, remoteAddr)
-	if respBytes == nil {
+func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
+	defer w.Close()
+	ctx, respMsg := handler(l, reqMsg, w.RemoteAddr())
+	if respMsg == nil {
 		return
 	}
-	_, err := l.udpConn.WriteTo(respBytes, remoteAddr)
+	err := w.WriteMsg(respMsg)
 	if err != nil {
-		if tools.IsCloseOrCanceled(err) {
-			return
-		}
-		l.logger.ErrorContext(ctx, fmt.Sprintf("write fail: %s", err))
+		l.logger.ErrorContext(ctx, fmt.Sprintf("write msg fail: %s", err))
 		return
 	}
 }

@@ -18,6 +18,7 @@ import (
 
 type APIServer struct {
 	ctx        context.Context
+	fatalClose func(error)
 	logger     log.Logger
 	debug      bool
 	secret     string
@@ -51,6 +52,10 @@ func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOpti
 	return a, nil
 }
 
+func (a *APIServer) WithFatalCloser(f func(error)) {
+	a.fatalClose = f
+}
+
 func (a *APIServer) Start() error {
 	if a.httpServer != nil {
 		task := 0
@@ -62,6 +67,7 @@ func (a *APIServer) Start() error {
 			go func() {
 				err := a.httpServer.ListenAndServe()
 				if err != nil && err != http.ErrServerClosed {
+					a.fatalClose(fmt.Errorf("failed to start API server: %s", err))
 					a.logger.Error(fmt.Sprintf("failed to start API server: %s", err))
 				}
 			}()

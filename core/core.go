@@ -16,14 +16,16 @@ import (
 )
 
 type Core struct {
-	ctx          context.Context
-	logger       log.Logger
-	apiServer    *APIServer
-	upstreams    map[string]adapter.Upstream
-	workflows    map[string]adapter.Workflow
-	matchPlugins map[string]adapter.MatchPlugin
-	execPlugins  map[string]adapter.ExecPlugin
-	listeners    map[string]adapter.Listener
+	ctx              context.Context
+	startFatalCtx    context.Context
+	startFatalCloser context.CancelCauseFunc
+	logger           log.Logger
+	apiServer        *APIServer
+	upstreams        map[string]adapter.Upstream
+	workflows        map[string]adapter.Workflow
+	matchPlugins     map[string]adapter.MatchPlugin
+	execPlugins      map[string]adapter.ExecPlugin
+	listeners        map[string]adapter.Listener
 }
 
 func init() {
@@ -144,8 +146,12 @@ func (c *Core) Run() error {
 	c.logger.Info("core start")
 	startTime := time.Now()
 	defer c.logger.Info("core close")
+	startFatalCtx, startFatalCancel := context.WithCancelCause(c.ctx)
 	if c.upstreams != nil {
 		for _, u := range c.upstreams {
+			if fatalStarter, ok := u.(adapter.FatalStarter); ok {
+				fatalStarter.WithFatalCloser(startFatalCancel)
+			}
 			err := u.Start()
 			if err != nil {
 				return fmt.Errorf("upstream [%s] start fail: %s", u.Tag(), err)
@@ -200,6 +206,9 @@ func (c *Core) Run() error {
 	}
 	if c.listeners != nil {
 		for _, l := range c.listeners {
+			if fatalStarter, ok := l.(adapter.FatalStarter); ok {
+				fatalStarter.WithFatalCloser(startFatalCancel)
+			}
 			err := l.Start()
 			if err != nil {
 				return fmt.Errorf("listener [%s] start fail: %s", l.Tag(), err)
@@ -217,6 +226,7 @@ func (c *Core) Run() error {
 		}()
 	}
 	if c.apiServer != nil {
+		c.apiServer.WithFatalCloser(startFatalCancel)
 		err := c.apiServer.Start()
 		if err != nil {
 			c.logger.Info(fmt.Sprintf("api server start fail: %s", err))
@@ -229,7 +239,11 @@ func (c *Core) Run() error {
 		}()
 	}
 	c.logger.Info(fmt.Sprintf("core is running, cost %s", time.Since(startTime).String()))
-	<-c.ctx.Done()
+	select {
+	case <-startFatalCtx.Done():
+		return startFatalCtx.Err()
+	case <-c.ctx.Done():
+	}
 	return nil
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -13,16 +13,20 @@ import (
 	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/listener"
+
+	"github.com/miekg/dns"
 )
 
 type tcpListener struct {
-	tag         string
-	ctx         context.Context
-	core        adapter.Core
-	logger      log.ContextLogger
-	listen      netip.AddrPort
-	workflow    string
-	tcpListener net.Listener
+	tag              string
+	ctx              context.Context
+	core             adapter.Core
+	logger           log.ContextLogger
+	fatalStartCloser func(error)
+	listen           netip.AddrPort
+	workflow         string
+	tcpListener      net.Listener
+	dnsServer        *dns.Server
 }
 
 func NewTCPListener(ctx context.Context, core adapter.Core, logger log.Logger, options listener.ListenerOptions) (adapter.Listener, error) {
@@ -63,18 +67,44 @@ func (l *tcpListener) Type() string {
 	return constant.ListenerTCP
 }
 
+func (l *tcpListener) WithFatalCloser(f func(err error)) {
+	l.fatalStartCloser = f
+}
+
 func (l *tcpListener) Start() error {
 	w := l.core.GetWorkflow(l.workflow)
 	if w == nil {
 		return fmt.Errorf("start tcp listener fail: workflow %s not found", l.workflow)
 	}
 	var err error
-	listenConfig := &net.ListenConfig{}
-	l.tcpListener, err = listenConfig.Listen(l.ctx, constant.NetworkTCP, l.listen.String())
+	l.tcpListener, err = net.Listen("tcp", l.listen.String())
 	if err != nil {
-		return fmt.Errorf("start tcp listener fail: listen %s fail: %s", l.listen.String(), err)
+		return fmt.Errorf("start tcp listener fail: %s", err)
 	}
-	go l.listenHandler()
+	l.dnsServer = &dns.Server{
+		Net:          constant.NetworkTCP,
+		Listener:     l.tcpListener,
+		Handler:      l,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+	waitLock := sync.Mutex{}
+	waitLock.Lock()
+	l.dnsServer.NotifyStartedFunc = waitLock.Unlock
+	go func() {
+		err := l.dnsServer.ActivateAndServe()
+		if err != nil {
+			if tools.IsCloseOrCanceled(err) {
+				return
+			}
+			if l.fatalStartCloser != nil {
+				l.fatalStartCloser(fmt.Errorf("start tcp listener fail: %s", err))
+			}
+			l.logger.Fatal(fmt.Sprintf("start tcp listener fail: %s", err))
+		}
+	}()
+	waitLock.Lock()
+	waitLock.Unlock()
 	return nil
 }
 
@@ -98,67 +128,15 @@ func (l *tcpListener) GetWorkflow() adapter.Workflow {
 	return l.core.GetWorkflow(l.workflow)
 }
 
-func (l *tcpListener) listenHandler() {
-	for {
-		select {
-		case <-l.ctx.Done():
-			return
-		default:
-		}
-		conn, err := l.tcpListener.Accept()
-		if err != nil {
-			if err == net.ErrClosed || strings.Contains(err.Error(), "use of closed network connection") {
-				return
-			}
-			l.logger.Error(fmt.Sprintf("accept connection fail: %s", err))
-			continue
-		}
-		go l.dialHandler(conn)
+func (l *tcpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
+	defer w.Close()
+	ctx, respMsg := handler(l, reqMsg, w.RemoteAddr())
+	if respMsg == nil {
+		return
 	}
-}
-
-func (l *tcpListener) dialHandler(conn net.Conn) {
-	defer conn.Close()
-	for {
-		select {
-		case <-l.ctx.Done():
-			return
-		default:
-		}
-		conn.SetDeadline(time.Now().Add(30 * time.Second))
-		lengthBytes := make([]byte, 2)
-		_, err := conn.Read(lengthBytes)
-		if err != nil {
-			if tools.IsCloseOrCanceled(err) {
-				return
-			}
-			l.logger.Error(fmt.Sprintf("read 2-bytes from connection fail: %s", err))
-			continue
-		}
-		buf := make([]byte, int(lengthBytes[0])<<8+int(lengthBytes[1]))
-		n, err := conn.Read(buf)
-		if err != nil {
-			if tools.IsCloseOrCanceled(err) {
-				return
-			}
-			l.logger.Error(fmt.Sprintf("read from connection fail: %s", err))
-			continue
-		}
-		ctx, respBytes := handler(l, buf[:n], conn.RemoteAddr())
-		if respBytes == nil {
-			continue
-		}
-		lengthBytes = make([]byte, 2)
-		lengthBytes[0] = byte(len(respBytes) >> 8)
-		lengthBytes[1] = byte(len(respBytes))
-		tcpPayload := append(lengthBytes, respBytes...)
-		_, err = conn.Write(tcpPayload)
-		if err != nil {
-			if tools.IsCloseOrCanceled(err) {
-				return
-			}
-			l.logger.ErrorContext(ctx, fmt.Sprintf("write to connection fail: %s", err))
-			continue
-		}
+	err := w.WriteMsg(respMsg)
+	if err != nil {
+		l.logger.ErrorContext(ctx, fmt.Sprintf("write msg fail: %s", err))
+		return
 	}
 }

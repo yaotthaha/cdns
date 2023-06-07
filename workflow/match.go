@@ -388,7 +388,7 @@ func matchPluginFunc(ctx context.Context, logger log.ContextLogger, r *matchItem
 			logger.DebugContext(ctx, fmt.Sprintf("match: plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 1
 		} else {
-			logger.DebugContext(ctx, fmt.Sprintf("no match: match, plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
+			logger.DebugContext(ctx, fmt.Sprintf("no match: plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 0
 		}
 	}

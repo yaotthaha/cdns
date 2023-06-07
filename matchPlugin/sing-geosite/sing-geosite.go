@@ -45,56 +45,124 @@ type domainItem struct {
 	regex   []*regexp.Regexp
 }
 
+type domainItemMatch struct {
+	typ string
+	val string
+}
+
 func (d *domainItem) match(ctx context.Context, domain string) (string, string, bool) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	wg := sync.WaitGroup{}
+	resChan := make(chan *domainItemMatch, 1)
 	if d.full != nil && len(d.full) > 0 {
-		for _, f := range d.full {
-			select {
-			case <-ctx.Done():
-				return "", "", false
-			default:
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, f := range d.full {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if f == domain {
+						select {
+						case resChan <- &domainItemMatch{
+							typ: "domain_full",
+							val: f,
+						}:
+						default:
+						}
+						return
+					}
+				}
 			}
-			if f == domain {
-				return "domain_full", f, true
-			}
-		}
+		}()
 	}
 	if d.suffix != nil && len(d.suffix) > 0 {
-		for _, f := range d.suffix {
-			select {
-			case <-ctx.Done():
-				return "", "", false
-			default:
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, f := range d.suffix {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if strings.HasSuffix(domain, f) {
+						select {
+						case resChan <- &domainItemMatch{
+							typ: "domain_suffix",
+							val: f,
+						}:
+						default:
+						}
+						return
+					}
+				}
 			}
-			if strings.HasSuffix(domain, f) {
-				return "domain_suffix", f, true
-			}
-		}
+		}()
 	}
 	if d.keyword != nil && len(d.keyword) > 0 {
-		for _, f := range d.keyword {
-			select {
-			case <-ctx.Done():
-				return "", "", false
-			default:
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, f := range d.keyword {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if strings.Contains(domain, f) {
+						select {
+						case resChan <- &domainItemMatch{
+							typ: "domain_keyword",
+							val: f,
+						}:
+						default:
+						}
+						return
+					}
+				}
 			}
-			if strings.Contains(domain, f) {
-				return "domain_keyword", f, true
-			}
-		}
+		}()
 	}
 	if d.regex != nil && len(d.regex) > 0 {
-		for _, f := range d.regex {
-			select {
-			case <-ctx.Done():
-				return "", "", false
-			default:
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, f := range d.regex {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if f.MatchString(domain) {
+						select {
+						case resChan <- &domainItemMatch{
+							typ: "domain_regex",
+							val: f.String(),
+						}:
+						default:
+						}
+						return
+					}
+				}
 			}
-			if f.MatchString(domain) {
-				return "domain_regex", f.String(), true
-			}
-		}
+		}()
 	}
-	return "", "", false
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
+	var resp *domainItemMatch
+	select {
+	case resp = <-resChan:
+		cancel()
+	case <-ctx.Done():
+	}
+	wg.Wait()
+	close(resChan)
+	if resp == nil {
+		return "", "", false
+	}
+	return resp.typ, resp.val, true
 }
 
 type option struct {

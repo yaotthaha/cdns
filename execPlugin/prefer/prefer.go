@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/upstream"
 
@@ -131,7 +132,12 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		}
 		if hasAAAA {
 			newRespMsg := &dns.Msg{}
-			newRespMsg.SetRcode(dnsCtx.RespMsg, dns.RcodeSuccess)
+			newRespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeSuccess)
+			var name string
+			if len(dnsCtx.ReqMsg.Question) > 1 {
+				name = dnsCtx.ReqMsg.Question[0].Name
+			}
+			newRespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 			dnsCtx.RespMsg = newRespMsg
 			p.logger.DebugContext(ctx, "prefer AAAA, remove answer")
 		}
@@ -161,8 +167,13 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			}
 		}
 		if hasA {
-			newRespMsg := dnsCtx.RespMsg.Copy()
-			newRespMsg.Answer = nil
+			newRespMsg := &dns.Msg{}
+			newRespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeSuccess)
+			var name string
+			if len(dnsCtx.ReqMsg.Question) > 1 {
+				name = dnsCtx.ReqMsg.Question[0].Name
+			}
+			newRespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 			dnsCtx.RespMsg = newRespMsg
 			p.logger.DebugContext(ctx, "prefer A, remove answer")
 		}

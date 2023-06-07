@@ -8,6 +8,7 @@ import (
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/listener"
 
@@ -25,17 +26,17 @@ func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, opti
 	}
 }
 
-func handler(h adapter.Listener, reqBytes []byte, remoteAddr net.Addr) (context.Context, []byte) {
+func handler(h adapter.Listener, reqMsg *dns.Msg, remoteAddr net.Addr) (context.Context, *dns.Msg) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			h.ContextLogger().Fatal(fmt.Sprintf("panic: %s", err))
+		}
+	}()
 	logger := h.ContextLogger()
 	tag := h.Tag()
 	ctx := h.Context()
 	workflow := h.GetWorkflow()
-	reqMsg := &dns.Msg{}
-	err := reqMsg.Unpack(reqBytes)
-	if err != nil {
-		logger.Error(fmt.Sprintf("unpack error: %s", err))
-		return ctx, nil
-	}
 	dnsCtx := &adapter.DNSContext{}
 	dnsCtx.Listener = tag
 	dnsCtx.ReqMsg = reqMsg
@@ -46,13 +47,20 @@ func handler(h adapter.Listener, reqBytes []byte, remoteAddr net.Addr) (context.
 	if dnsCtx.RespMsg == nil {
 		dnsCtx.RespMsg = &dns.Msg{}
 		dnsCtx.RespMsg.SetRcode(reqMsg, dns.RcodeServerFailure)
+		var name string
+		if len(dnsCtx.ReqMsg.Question) > 1 {
+			name = dnsCtx.ReqMsg.Question[0].Name
+		}
+		dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 	}
-	respBytes, err := dnsCtx.RespMsg.Pack()
-	if err != nil {
-		logger.ErrorContext(ctx, fmt.Sprintf("pack fail: %s", err))
-		return ctx, nil
+	/**
+	qStrs := make([]string, len(dnsCtx.RespMsg.Question))
+	for i, q := range dnsCtx.RespMsg.Question {
+		qStrs[i] = q.String()
 	}
-	return ctx, respBytes
+	logger.DebugContext(ctx, fmt.Sprintf("response: question: [%s], answers: [%s]", strings.Join(qStrs, " | "), tools.Join(dnsCtx.RespMsg.Answer, " | ")))
+	*/
+	return ctx, dnsCtx.RespMsg
 }
 
 func parseNetAddrToNetIPAddrPort(addr net.Addr) netip.AddrPort {

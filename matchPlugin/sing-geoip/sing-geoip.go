@@ -169,14 +169,14 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 			case <-ctx.Done():
 				return false
 			default:
-			}
-			code := reader.Lookup(ip)
-			if code == "unknown" {
-				continue
-			}
-			if codeMap[code] {
-				s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geoip: %s", code))
-				return true
+				code := reader.Lookup(ip)
+				if code == "unknown" {
+					continue
+				}
+				if codeMap[code] {
+					s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geoip: %s", code))
+					return true
+				}
 			}
 		}
 	}
