@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
-	"strings"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
 
@@ -166,17 +166,16 @@ func matchListener(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 				break
 			}
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): listener => %s", dnsCtx.Listener))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): listener => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: listener => %s", dnsCtx.Listener))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: listener => %s", matchStr))
 			return 1
 		}
@@ -204,17 +203,16 @@ func matchClientIP(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 			}
 			break
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): client_ip => %s", dnsCtx.ClientIP.Addr()))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): client_ip => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: client_ip => %s", dnsCtx.ClientIP.Addr()))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: client_ip => %s", matchStr))
 			return 1
 		}
@@ -231,17 +229,16 @@ func matchQType(ctx context.Context, logger log.ContextLogger, r *matchItem, dns
 				break
 			}
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): qtype => %s", dns.TypeToString[dnsCtx.ReqMsg.Question[0].Qtype]))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): qtype => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: qtype => %s", dns.TypeToString[dnsCtx.ReqMsg.Question[0].Qtype]))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: qtype => %s", matchStr))
 			return 1
 		}
@@ -259,17 +256,16 @@ func matchQName(ctx context.Context, logger log.ContextLogger, r *matchItem, dns
 				break
 			}
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): qname => %s", dnsCtx.ReqMsg.Question[0].Name))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): qname => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: qname => %s", dnsCtx.ReqMsg.Question[0].Name))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: qname => %s", matchStr))
 			return 1
 		}
@@ -286,17 +282,16 @@ func matchHasRespMsg(ctx context.Context, logger log.ContextLogger, r *matchItem
 		if !*r.hasRespMsg && dnsCtx.RespMsg == nil {
 			matchStr = fmt.Sprintf("%t", *r.hasRespMsg)
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): has_resp_msg => %t", dnsCtx.RespMsg != nil))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): has_resp_msg => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: has_resp_msg => %t", dnsCtx.RespMsg != nil))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: has_resp_msg => %s", matchStr))
 			return 1
 		}
@@ -337,17 +332,16 @@ func matchRespIP(ctx context.Context, logger log.ContextLogger, r *matchItem, dn
 				}
 			}
 		}
-		switch {
-		case matchStr == "" && r.invert:
-			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): resp_ip => [%s]", join(answerIPs, ",")))
+		if matchStr == "" && r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): resp_ip => [%s]", tools.Join(answerIPs, ",")))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): resp_ip => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
-			logger.DebugContext(ctx, fmt.Sprintf("no match: resp_ip => [%s]", join(answerIPs, ",")))
+		} else if matchStr == "" && !r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match: resp_ip => [%s]", tools.Join(answerIPs, ",")))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: resp_ip => %s", matchStr))
 			return 1
 		}
@@ -364,17 +358,16 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 				break
 			}
 		}
-		switch {
-		case matchStr == "" && r.invert:
+		if matchStr == "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): mark => %d", dnsCtx.Mark))
 			return 1
-		case matchStr != "" && r.invert:
+		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): mark => %s", matchStr))
 			return 0
-		case matchStr == "" && !r.invert:
+		} else if matchStr == "" && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: mark => %d", dnsCtx.Mark))
 			return 0
-		case matchStr != "" && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: mark => %s", matchStr))
 			return 1
 		}
@@ -385,17 +378,16 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 func matchPluginFunc(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.plugin != nil {
 		result := r.plugin.plugin.Match(ctx, r.plugin.args, dnsCtx)
-		switch {
-		case result && r.invert:
+		if result && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 0
-		case !result && r.invert:
+		} else if !result && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 1
-		case result && !r.invert:
+		} else if result && !r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match: plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 1
-		case !result && !r.invert:
+		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("no match: match, plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 0
 		}
@@ -413,17 +405,16 @@ func matchMatchOr(ctx context.Context, logger log.ContextLogger, r *matchItem, d
 			}
 			return false
 		}()
-		switch {
-		case result && r.invert:
+		if result && r.invert {
 			logger.DebugContext(ctx, "match(invert): match_or")
 			return 0
-		case !result && r.invert:
+		} else if !result && r.invert {
 			logger.DebugContext(ctx, "no match(invert): match_or")
 			return 1
-		case result && !r.invert:
+		} else if result && !r.invert {
 			logger.DebugContext(ctx, "match: match_or")
 			return 1
-		case !result && !r.invert:
+		} else {
 			logger.DebugContext(ctx, "no match: match_or")
 			return 0
 		}
@@ -444,17 +435,16 @@ func matchMatchAnd(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 			}
 			return false
 		}()
-		switch {
-		case result && r.invert:
+		if result && r.invert {
 			logger.DebugContext(ctx, "match(invert): match_or")
 			return 0
-		case !result && r.invert:
+		} else if !result && r.invert {
 			logger.DebugContext(ctx, "no match(invert): match_or")
 			return 1
-		case result && !r.invert:
+		} else if result && !r.invert {
 			logger.DebugContext(ctx, "match: match_or")
 			return 1
-		case !result && !r.invert:
+		} else {
 			logger.DebugContext(ctx, "no match: match_or")
 			return 0
 		}
@@ -484,18 +474,9 @@ func (r *matchItem) match(ctx context.Context, logger log.ContextLogger, dnsCtx 
 		if result >= 0 {
 			if result == 1 {
 				return true
-			} else {
-				return false
 			}
+			return false
 		}
 	}
 	return false
-}
-
-func join[T fmt.Stringer](arr []T, sep string) string {
-	arrStr := make([]string, len(arr))
-	for i, v := range arr {
-		arrStr[i] = v.String()
-	}
-	return strings.Join(arrStr, sep)
 }

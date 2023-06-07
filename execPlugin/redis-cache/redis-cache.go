@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/go-chi/chi"
 	"net/http"
 	"net/netip"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
 
+	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"github.com/redis/go-redis/v9"
 	"gopkg.in/yaml.v3"
@@ -164,7 +164,7 @@ func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 			return true
 		}
 		dnsStr := hex.EncodeToString(dnsBytes)
-		r.logger.InfoContext(ctx, fmt.Sprintf("cache ==> %s", key))
+		r.logger.DebugContext(ctx, fmt.Sprintf("cache ==> %s", key))
 		err = r.redisClient.Set(ctx, key, dnsStr, time.Duration(maxTTL)*time.Second).Err()
 		if err != nil {
 			r.logger.ErrorContext(ctx, fmt.Sprintf("cache to redis fail: %s", err))
@@ -192,7 +192,7 @@ func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		}
 		dnsMsg.SetReply(dnsCtx.ReqMsg)
 		dnsCtx.RespMsg = dnsMsg
-		r.logger.InfoContext(ctx, fmt.Sprintf("restore ==> %s", key))
+		r.logger.DebugContext(ctx, fmt.Sprintf("restore ==> %s", key))
 		done = true
 	}
 	if _, ok := args["return"]; ok && done {

@@ -44,8 +44,10 @@ func (w *Workflow) Exec(ctx context.Context, dnsCtx *adapter.DNSContext) bool {
 	dnsCtx.WithWorkflow(w)
 	for _, r := range w.rules {
 		if !r.Exec(ctx, w.logger, dnsCtx) {
+			w.logger.DebugContext(ctx, fmt.Sprintf("workflow %s return", w.tag))
 			return false
 		}
 	}
+	w.logger.DebugContext(ctx, fmt.Sprintf("workflow %s return", w.tag))
 	return true
 }

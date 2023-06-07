@@ -64,20 +64,12 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 	if options.JumpTo != nil && len(*options.JumpTo) > 0 {
 		eItem.jumpTo = make([]string, len(*options.JumpTo))
 		for i, jumpTo := range *options.JumpTo {
-			w := core.GetWorkflow(jumpTo)
-			if w == nil {
-				return nil, fmt.Errorf("workflow %s not found", jumpTo)
-			}
 			eItem.jumpTo[i] = jumpTo
 		}
 		rn++
 	}
 
 	if options.GoTo != nil {
-		w := core.GetWorkflow(*options.GoTo)
-		if w == nil {
-			return nil, fmt.Errorf("workflow %s not found", *options.GoTo)
-		}
 		eItem.goTo = options.GoTo
 		rn++
 	}
@@ -108,6 +100,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		dnsCtx.Mark = *e.setMark
 	}
 	if e.upstream != nil {
+		logger.DebugContext(ctx, fmt.Sprintf("sends to upstream: %s", *e.upstream))
 		u := e.core.GetUpstream(*e.upstream)
 		dnsCtx.WithUpstream(u)
 		respMsg, err := upstream.RetryUpstream(ctx, u, dnsCtx.ReqMsg)
@@ -116,6 +109,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		}
 	}
 	if e.plugin != nil {
+		logger.DebugContext(ctx, fmt.Sprintf("exec plugin: %s, args: %+v", e.plugin.plugin.Tag(), e.plugin.args))
 		if !e.plugin.plugin.Exec(ctx, e.plugin.args, dnsCtx) {
 			return false
 		}

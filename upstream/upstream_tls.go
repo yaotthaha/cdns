@@ -155,7 +155,7 @@ func (u *tlsUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 	if deadline, ok := ctx.Deadline(); ok {
 		dnsConn.SetDeadline(deadline)
 	} else {
-		dnsConn.SetDeadline(time.Now().Add(30 * time.Second))
+		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
 	}
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
@@ -175,5 +175,6 @@ func (u *tlsUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 		return nil, err
 	}
 	u.logger.DebugContext(ctx, "read dns message success")
+	dnsConn.SetDeadline(time.Time{})
 	return respMsg, nil
 }

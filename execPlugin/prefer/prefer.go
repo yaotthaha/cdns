@@ -3,11 +3,11 @@ package prefer
 import (
 	"context"
 	"fmt"
-	"github.com/yaotthaha/cdns/upstream"
 	"net/http"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
+	"github.com/yaotthaha/cdns/upstream"
 
 	"github.com/miekg/dns"
 )

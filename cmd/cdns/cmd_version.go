@@ -2,12 +2,12 @@ package cdns
 
 import (
 	"fmt"
-	"github.com/yaotthaha/cdns/adapter"
-	"github.com/yaotthaha/cdns/execPlugin"
-	"github.com/yaotthaha/cdns/matchPlugin"
 	"strings"
 
+	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
+	"github.com/yaotthaha/cdns/execPlugin"
+	"github.com/yaotthaha/cdns/matchPlugin"
 
 	"github.com/spf13/cobra"
 )
