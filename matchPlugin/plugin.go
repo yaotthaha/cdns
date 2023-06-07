@@ -1,7 +1,6 @@
 package matchPlugin
 
 import (
-	"github.com/yaotthaha/cdns/adapter"
 	// use custom match plugin
 	_ "github.com/yaotthaha/cdns/matchPlugin/domain"
 	_ "github.com/yaotthaha/cdns/matchPlugin/ip"
@@ -10,8 +9,4 @@ import (
 )
 
 func Register() {
-}
-
-func GetAllMatchPlugin() []string {
-	return adapter.GetAllMatchPlugin()
 }

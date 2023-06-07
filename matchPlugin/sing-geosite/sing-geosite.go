@@ -224,9 +224,8 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 						if match {
 							s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geosite: code ==> %s, type ==> %s, rule ==> %s", code, matchType, matchStr))
 							return true
-						} else {
-							return false
 						}
+						continue
 					} else {
 						s.logger.ErrorContext(ctx, fmt.Sprintf("code %s not found", code))
 						return false

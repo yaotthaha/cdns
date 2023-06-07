@@ -95,6 +95,7 @@ func (u *udpUpstream) ContextLogger() log.ContextLogger {
 func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
 	u.logger.InfoContext(ctx, fmt.Sprintf("exchange dns: %s", logDNSMsg(dnsMsg)))
 	u.logger.DebugContext(ctx, "get connection")
+	isClosed := false
 	conn, err := u.connPool.Get()
 	if err != nil {
 		err = fmt.Errorf("get connection fail: %s", err)
@@ -104,9 +105,11 @@ func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 	u.logger.DebugContext(ctx, "get connection success")
 	dnsConn := &dns.Conn{Conn: newPacketConn(conn)}
 	defer func() {
-		err := u.connPool.Put(conn)
-		if err != nil {
-			u.logger.ErrorContext(ctx, fmt.Sprintf("put connection to pool fail: %s", err))
+		if !isClosed {
+			err := u.connPool.Put(conn)
+			if err != nil {
+				u.logger.ErrorContext(ctx, fmt.Sprintf("put connection to pool fail: %s", err))
+			}
 		}
 	}()
 	u.logger.DebugContext(ctx, "write dns message")
@@ -117,6 +120,8 @@ func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 	}
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
+		isClosed = true
+		conn.Close()
 		err = fmt.Errorf("write dns message fail: %s", err)
 		u.logger.ErrorContext(ctx, err.Error())
 		return nil, err
@@ -124,6 +129,8 @@ func (u *udpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 	u.logger.DebugContext(ctx, "read dns message")
 	respMsg, err := dnsConn.ReadMsg()
 	if err != nil {
+		isClosed = true
+		conn.Close()
 		err = fmt.Errorf("read dns message fail: %s", err)
 		u.logger.ErrorContext(ctx, err.Error())
 		return nil, err

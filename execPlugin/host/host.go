@@ -82,7 +82,7 @@ func (h *Host) Start() error {
 	}
 	rule := mergeRules(rules...)
 	h.rule.Store(rule)
-	h.logger.Info("read rules success: %d", len(*rule))
+	h.logger.Info(fmt.Sprintf("read rules success: %d", len(*rule)))
 	return nil
 }
 

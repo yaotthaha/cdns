@@ -3,6 +3,7 @@ package prefer
 import (
 	"context"
 	"fmt"
+	"github.com/yaotthaha/cdns/upstream"
 	"net/http"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -129,29 +130,20 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			}
 		}
 		if hasAAAA {
-			newAnswers := make([]dns.RR, 0)
-			removeN := 0
-			for _, rr := range dnsCtx.RespMsg.Answer {
-				switch r := rr.(type) {
-				case *dns.A:
-					removeN++
-					continue
-				default:
-					newAnswers = append(newAnswers, r)
-				}
-			}
-			dnsCtx.RespMsg.Answer = newAnswers
-			p.logger.DebugContext(ctx, fmt.Sprintf("prefer AAAA, remove A from answer: %d", removeN))
+			newRespMsg := &dns.Msg{}
+			newRespMsg.SetRcode(dnsCtx.RespMsg, dns.RcodeSuccess)
+			dnsCtx.RespMsg = newRespMsg
+			p.logger.DebugContext(ctx, "prefer AAAA, remove answer")
 		}
 	}
 	if DNSTypeAAAA && prefer == "A" {
 		reqADNSMsg := &dns.Msg{}
 		reqADNSMsg.SetQuestion(dns.Fqdn(dnsCtx.ReqMsg.Question[0].Name), dns.TypeA)
-		upstream := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)-1]
-		if upstream == nil {
+		up := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)-1]
+		if up == nil {
 			return true
 		}
-		respADNSMsg, err := upstream.Exchange(ctx, reqADNSMsg)
+		respADNSMsg, err := upstream.RetryUpstream(ctx, up, reqADNSMsg)
 		if err != nil {
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer A fail: dns query fail"))
 			return true
@@ -169,19 +161,10 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 			}
 		}
 		if hasA {
-			newAnswers := make([]dns.RR, 0)
-			removeN := 0
-			for _, rr := range dnsCtx.RespMsg.Answer {
-				switch r := rr.(type) {
-				case *dns.AAAA:
-					removeN++
-					continue
-				default:
-					newAnswers = append(newAnswers, r)
-				}
-			}
-			dnsCtx.RespMsg.Answer = newAnswers
-			p.logger.DebugContext(ctx, fmt.Sprintf("prefer A, remove AAAA from answer: %d", removeN))
+			newRespMsg := dnsCtx.RespMsg.Copy()
+			newRespMsg.Answer = nil
+			dnsCtx.RespMsg = newRespMsg
+			p.logger.DebugContext(ctx, "prefer A, remove answer")
 		}
 	}
 	return true

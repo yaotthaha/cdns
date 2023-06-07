@@ -156,6 +156,11 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		case string:
 			r = strings.ToUpper(r)
 			switch r {
+			case "SUCCESS":
+				dnsCtx.RespMsg = &dns.Msg{}
+				dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeSuccess)
+				logger.DebugContext(ctx, "return success")
+				done = true
 			case "FAIL":
 				dnsCtx.RespMsg = &dns.Msg{}
 				dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeServerFailure)

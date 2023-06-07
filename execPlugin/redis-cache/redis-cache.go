@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/go-chi/chi"
 	"net/http"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -25,13 +27,13 @@ func init() {
 }
 
 type RedisCache struct {
-	tag      string
-	ctx      context.Context
-	logger   log.ContextLogger
-	address  netip.AddrPort
-	password string
-	database int
-
+	tag         string
+	ctx         context.Context
+	logger      log.ContextLogger
+	address     netip.AddrPort
+	password    string
+	database    int
+	cleanLock   sync.Mutex
 	redisClient *redis.Client
 }
 
@@ -114,7 +116,26 @@ func (r *RedisCache) WithCore(_ adapter.ExecPluginCore) {
 }
 
 func (r *RedisCache) APIHandler() http.Handler {
-	return nil
+	chiRouter := chi.NewRouter()
+	chiRouter.Get("/clean", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go r.cleanCache()
+	})
+	return chiRouter
+}
+
+func (r *RedisCache) cleanCache() {
+	if !r.cleanLock.TryLock() {
+		return
+	}
+	defer r.cleanLock.Unlock()
+	r.logger.Info("clean cache...")
+	err := r.redisClient.FlushAll(r.ctx).Err()
+	if err != nil {
+		r.logger.Error(fmt.Sprintf("clean cache fail: %s", err))
+		return
+	}
+	r.logger.Info("clean cache done")
 }
 
 func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

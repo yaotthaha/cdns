@@ -2,6 +2,9 @@ package cdns
 
 import (
 	"fmt"
+	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/execPlugin"
+	"github.com/yaotthaha/cdns/matchPlugin"
 	"strings"
 
 	"github.com/yaotthaha/cdns/constant"
@@ -21,7 +24,40 @@ func init() {
 	mainCommand.AddCommand(versionCommand)
 }
 
+var (
+	MatchPlugins []string
+	ExecPlugins  []string
+)
+
+func GetAllPlugins() string {
+	matchPlugin.Register()
+	execPlugin.Register()
+	MatchPlugins = adapter.GetAllMatchPlugin()
+	ExecPlugins = adapter.GetAllExecPlugin()
+	str := ""
+	mp := MatchPlugins
+	if mp != nil && len(mp) > 0 {
+		str += "Match Plugins: "
+		str += strings.Join(mp, ", ")
+	}
+	ep := ExecPlugins
+	if ep != nil && len(ep) > 0 {
+		if len(str) > 0 {
+			str += "\n"
+		}
+		str += "Exec Plugins: "
+		str += strings.Join(ep, ", ")
+	}
+	if len(str) > 0 {
+		str += "\n"
+	}
+	if len(str) == 0 {
+		str = "No Plugins"
+	}
+	return str
+}
+
 func showVersion() {
 	fmt.Println(constant.GetVersion())
-	fmt.Println(strings.TrimSpace(constant.GetAllPlugins()))
+	fmt.Println(strings.TrimSpace(GetAllPlugins()))
 }
