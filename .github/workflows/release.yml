@@ -2,7 +2,7 @@ name: Release
 
 on:
   release:
-    types: [ created, published ]
+    types: [created,published]
 
 jobs:
   release:
@@ -29,12 +29,12 @@ jobs:
         run: echo ::set-output name=COMMIT::$(git rev-parse --short HEAD)
 
       - name: Build
-        uses: wangyoucao577/go-release-action@v1
+        uses: wangyoucao577/go-release-action@v1.30
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          goversion: "1.20.2"
+          goversion: 1.20.2
           project_path: "."
           binary_name: "cdns"
           build_flags: -v -trimpath
