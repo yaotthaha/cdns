@@ -17,6 +17,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+var _ adapter.Listener = (*udpListener)(nil)
+
 type udpListener struct {
 	tag              string
 	ctx              context.Context
@@ -34,7 +36,7 @@ func NewUDPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		tag:    options.Tag,
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s/%s", constant.ListenerUDP, options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
 	if options.Listen == "" {
 		options.Listen = ":53"

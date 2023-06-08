@@ -23,6 +23,8 @@ func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, opti
 		return NewTCPListener(ctx, core, logger, options)
 	case constant.ListenerTLS:
 		return NewTLSListener(ctx, core, logger, options)
+	case constant.ListenerHTTP:
+		return NewHTTPListener(ctx, core, logger, options)
 	default:
 		return nil, fmt.Errorf("listener type %s not supported", options.Type)
 	}

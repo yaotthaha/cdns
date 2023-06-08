@@ -17,6 +17,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+var _ adapter.Listener = (*tcpListener)(nil)
+
 type tcpListener struct {
 	tag              string
 	ctx              context.Context
@@ -34,7 +36,7 @@ func NewTCPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		tag:    options.Tag,
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s/%s", constant.ListenerTCP, options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
 	if options.Listen == "" {
 		options.Listen = ":53"

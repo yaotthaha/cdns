@@ -20,6 +20,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+var _ adapter.Listener = (*tlsListener)(nil)
+
 type tlsListener struct {
 	tag              string
 	ctx              context.Context
@@ -38,7 +40,7 @@ func NewTLSListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		tag:    options.Tag,
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s/%s", constant.ListenerTLS, options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
 	if options.Listen == "" {
 		options.Listen = ":853"
