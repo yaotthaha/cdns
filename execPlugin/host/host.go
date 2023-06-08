@@ -32,12 +32,14 @@ func init() {
 type Host struct {
 	tag        string
 	logger     log.ContextLogger
+	insideRule *map[*rule][]netip.Addr
 	file       []string
-	rule       atomic.Pointer[map[*rule][]netip.Addr]
+	fileRule   atomic.Pointer[map[*rule][]netip.Addr]
 	reloadLock sync.Mutex
 }
 
 type option struct {
+	Rule types.Listable[string] `yaml:"rule"`
 	File types.Listable[string] `yaml:"file"`
 }
 
@@ -45,7 +47,6 @@ func NewHost(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	h := &Host{
 		tag: tag,
 	}
-
 	optionBytes, err := yaml.Marshal(args)
 	if err != nil {
 		return nil, fmt.Errorf("parse args fail: %s", err)
@@ -55,11 +56,17 @@ func NewHost(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse args fail: %s", err)
 	}
-	if len(op.File) == 0 {
+	if op.Rule != nil && len(op.Rule) > 0 {
+		insideRule, err := loadFromArray(op.Rule)
+		if err != nil {
+			return nil, fmt.Errorf("parse args fail: %s", err)
+		}
+		h.insideRule = insideRule
+	}
+	if h.insideRule == nil && len(op.File) == 0 {
 		return nil, fmt.Errorf("parse args fail: file is empty")
 	}
 	h.file = op.File
-
 	return h, nil
 }
 
@@ -81,7 +88,7 @@ func (h *Host) Start() error {
 		rules = append(rules, ru)
 	}
 	rule := mergeRules(rules...)
-	h.rule.Store(rule)
+	h.fileRule.Store(rule)
 	h.logger.Info(fmt.Sprintf("read rules success: %d", len(*rule)))
 	return nil
 }
@@ -125,7 +132,7 @@ func (h *Host) reloadRule() {
 		rules = append(rules, ru)
 	}
 	rule := mergeRules(rules...)
-	h.rule.Store(rule)
+	h.fileRule.Store(rule)
 	h.logger.Info(fmt.Sprintf("reload rule success: %d", len(*rule)))
 }
 
@@ -136,58 +143,70 @@ func (h *Host) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCo
 	default:
 		return true
 	}
-	rule := h.rule.Load()
-	if rule == nil {
+	ruleGroup := make([]*map[*rule][]netip.Addr, 0)
+	fileRule := h.fileRule.Load()
+	if fileRule == nil {
+		return true
+	}
+	ruleGroup = append(ruleGroup, fileRule)
+	if h.insideRule != nil {
+		ruleGroup = append(ruleGroup, h.insideRule)
+	}
+	switch dnsCtx.ReqMsg.Question[0].Qtype {
+	case dns.TypeA:
+	case dns.TypeAAAA:
+	default:
 		return true
 	}
 	domain := dnsCtx.ReqMsg.Question[0].Name
 	if dns.IsFqdn(domain) {
 		domain = domain[:len(domain)-1]
 	}
-	for r, ips := range *rule {
-		matchType, matchRule, match := r.match(domain)
-		if match {
-			h.logger.InfoContext(ctx, fmt.Sprintf("match rule: %s => %s", matchType, matchRule))
-			switch dnsCtx.ReqMsg.Question[0].Qtype {
-			case dns.TypeA:
-				rr := make([]dns.RR, 0)
-				for _, ip := range ips {
-					if ip.Is4() {
-						rrItem := &dns.A{
-							Hdr: dns.RR_Header{
-								Name:   dnsCtx.ReqMsg.Question[0].Name,
-								Rrtype: dns.TypeA,
-								Class:  dns.ClassINET,
-							},
-							A: ip.AsSlice(),
+	for _, rule := range ruleGroup {
+		for r, ips := range *rule {
+			matchType, matchRule, match := r.match(domain)
+			if match {
+				h.logger.InfoContext(ctx, fmt.Sprintf("match rule: %s => %s", matchType, matchRule))
+				switch dnsCtx.ReqMsg.Question[0].Qtype {
+				case dns.TypeA:
+					rr := make([]dns.RR, 0)
+					for _, ip := range ips {
+						if ip.Is4() {
+							rrItem := &dns.A{
+								Hdr: dns.RR_Header{
+									Name:   dnsCtx.ReqMsg.Question[0].Name,
+									Rrtype: dns.TypeA,
+									Class:  dns.ClassINET,
+								},
+								A: ip.AsSlice(),
+							}
+							rr = append(rr, rrItem)
 						}
-						rr = append(rr, rrItem)
 					}
-				}
-				newRespMsg := &dns.Msg{}
-				newRespMsg.SetReply(dnsCtx.ReqMsg)
-				newRespMsg.Used(rr)
-				dnsCtx.RespMsg = newRespMsg
-			case dns.TypeAAAA:
-				rr := make([]dns.RR, 0)
-				for _, ip := range ips {
-					if ip.Is6() {
-						rrItem := &dns.AAAA{
-							Hdr: dns.RR_Header{
-								Name:   dnsCtx.ReqMsg.Question[0].Name,
-								Rrtype: dns.TypeAAAA,
-								Class:  dns.ClassINET,
-							},
-							AAAA: ip.AsSlice(),
+					newRespMsg := &dns.Msg{}
+					newRespMsg.SetReply(dnsCtx.ReqMsg)
+					newRespMsg.Used(rr)
+					dnsCtx.RespMsg = newRespMsg
+				case dns.TypeAAAA:
+					rr := make([]dns.RR, 0)
+					for _, ip := range ips {
+						if ip.Is6() {
+							rrItem := &dns.AAAA{
+								Hdr: dns.RR_Header{
+									Name:   dnsCtx.ReqMsg.Question[0].Name,
+									Rrtype: dns.TypeAAAA,
+									Class:  dns.ClassINET,
+								},
+								AAAA: ip.AsSlice(),
+							}
+							rr = append(rr, rrItem)
 						}
-						rr = append(rr, rrItem)
 					}
+					newRespMsg := &dns.Msg{}
+					newRespMsg.SetReply(dnsCtx.ReqMsg)
+					newRespMsg.Used(rr)
+					dnsCtx.RespMsg = newRespMsg
 				}
-				newRespMsg := &dns.Msg{}
-				newRespMsg.SetReply(dnsCtx.ReqMsg)
-				newRespMsg.Used(rr)
-				dnsCtx.RespMsg = newRespMsg
-			default:
 				return true
 			}
 		}
@@ -235,6 +254,59 @@ func loadHostFile(filename string) (*map[*rule][]netip.Addr, error) {
 	domainMap := make(map[string]*rule)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+		line = strings.TrimSpace(line)
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		domain := fields[0]
+		ipStr := fields[1:]
+		rule := &rule{}
+		if strings.HasPrefix(domain, "full:") {
+			rule.full = domain[5:]
+		} else if strings.HasPrefix(domain, "suffix:") {
+			rule.suffix = domain[7:]
+		} else {
+			return nil, fmt.Errorf("invalid domain: %s", domain)
+		}
+		ips := make([]netip.Addr, 0, len(ipStr))
+		for _, ip := range ipStr {
+			ipAddr, err := netip.ParseAddr(ip)
+			if err != nil {
+				return nil, fmt.Errorf("invalid ip: %s", ip)
+			}
+			ips = append(ips, ipAddr)
+		}
+		if oldRule, ok := domainMap[domain]; ok {
+			oldAddrs := rules[oldRule]
+			for _, ip := range ips {
+				found := false
+				for _, oldAddr := range oldAddrs {
+					if oldAddr.Compare(ip) == 0 {
+						found = true
+						break
+					}
+				}
+				if !found {
+					oldAddrs = append(oldAddrs, ip)
+				}
+			}
+			rules[oldRule] = oldAddrs
+		} else {
+			rules[rule] = ips
+			domainMap[domain] = rule
+		}
+	}
+	return &rules, nil
+}
+
+func loadFromArray(arr []string) (*map[*rule][]netip.Addr, error) {
+	rules := make(map[*rule][]netip.Addr)
+	domainMap := make(map[string]*rule)
+	for _, line := range arr {
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}

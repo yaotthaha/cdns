@@ -1,7 +1,9 @@
 NAME = cdns
+VERSION = $(shell git describe --tags --abbrev=0)
+COMMIT = $(shell git rev-parse HEAD)
 
 build:
-	@go build -o $(NAME) -v -trimpath -ldflags "-s -w -buildid=" .
+	@go build -o $(NAME) -v -trimpath -ldflags "-X 'github.com/yaotthaha/cdns/constant.Commit=$(COMMIT)' -X 'github.com/yaotthaha/cdns/constant.Version=$(VERSION)' -s -w -buildid=" .
 
 fmt:
 	@gofumpt -l -w .

@@ -59,5 +59,6 @@ func GetAllPlugins() string {
 
 func showVersion() {
 	fmt.Println(constant.GetVersion())
+	fmt.Println("")
 	fmt.Println(strings.TrimSpace(GetAllPlugins()))
 }
