@@ -240,6 +240,7 @@ func (l *httpListener) Start() error {
 			l.httpListener = tcpListener
 		}
 		go func() {
+			l.logger.Info(fmt.Sprintf("start http listener on %s", l.listen.String()))
 			err := l.httpServer.Serve(l.httpListener)
 			if err != nil {
 				if tools.IsCloseOrCanceled(err) {
@@ -269,6 +270,7 @@ func (l *httpListener) Start() error {
 			return fmt.Errorf("start http listener fail: %s", err)
 		}
 		go func() {
+			l.logger.Info(fmt.Sprintf("start http listener on %s", l.listen.String()))
 			err := l.http3Server.Serve(l.udpConn)
 			if err != nil {
 				if tools.IsCloseOrCanceled(err) {
@@ -348,7 +350,7 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	var remoteAddr net.Addr
+	var remoteIP netip.Addr
 	if l.realIPHeader != nil {
 		if l.trustIP != nil {
 			trust := false
@@ -373,24 +375,32 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 				for _, rh := range l.realIPHeader {
 					ipStr := r.Header.Get(rh)
 					if len(ipStr) > 0 {
-						remoteAddr = l.parseNetAddr(net.JoinHostPort(ipStr, "0"))
+						ip, err := netip.ParseAddr(ipStr)
+						if err != nil {
+							return
+						}
+						remoteIP = ip
 						break
 					}
 				}
 			} else {
-				remoteAddr = l.parseNetAddr(remoteAddrPort.String())
+				remoteIP = remoteAddrPort.Addr()
 			}
 		} else {
 			for _, rh := range l.realIPHeader {
 				ipStr := r.Header.Get(rh)
 				if len(ipStr) > 0 {
-					remoteAddr = l.parseNetAddr(net.JoinHostPort(ipStr, "0"))
+					ip, err := netip.ParseAddr(ipStr)
+					if err != nil {
+						return
+					}
+					remoteIP = ip
 					break
 				}
 			}
 		}
 	} else {
-		remoteAddr = l.parseNetAddr(remoteAddrPort.String())
+		remoteIP = remoteAddrPort.Addr()
 	}
 	for k := range r.Header {
 		switch k {
@@ -450,7 +460,7 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, []byte("400 Bad Request"))
 		return
 	}
-	ctx, respMsg := handler(l, dnsMsg, remoteAddr)
+	ctx, respMsg := handler(l, dnsMsg, remoteIP)
 	if respMsg == nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintln(w, []byte("500 Server Internal Error"))

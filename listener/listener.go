@@ -3,7 +3,6 @@ package listener
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/netip"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -30,7 +29,7 @@ func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, opti
 	}
 }
 
-func handler(h adapter.Listener, reqMsg *dns.Msg, remoteAddr net.Addr) (context.Context, *dns.Msg) {
+func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.Context, *dns.Msg) {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -44,7 +43,7 @@ func handler(h adapter.Listener, reqMsg *dns.Msg, remoteAddr net.Addr) (context.
 	dnsCtx := &adapter.DNSContext{}
 	dnsCtx.Listener = tag
 	dnsCtx.ReqMsg = reqMsg
-	dnsCtx.ClientIP = parseNetAddrToNetIPAddrPort(remoteAddr)
+	dnsCtx.ClientIP = remoteIP
 	ctx = log.AddContextTag(ctx)
 	logger.InfoContext(ctx, fmt.Sprintf("receive request from %s, qtype: %s, qname: %s", dnsCtx.ClientIP.String(), dns.TypeToString[reqMsg.Question[0].Qtype], reqMsg.Question[0].Name))
 	workflow.Exec(ctx, dnsCtx)
@@ -67,15 +66,17 @@ func handler(h adapter.Listener, reqMsg *dns.Msg, remoteAddr net.Addr) (context.
 	return ctx, dnsCtx.RespMsg
 }
 
-func parseNetAddrToNetIPAddrPort(addr net.Addr) netip.AddrPort {
-	switch v := addr.(type) {
-	case *net.UDPAddr:
-		addrPort, _ := netip.ParseAddrPort(v.String())
-		return addrPort
-	case *net.TCPAddr:
-		addrPort, _ := netip.ParseAddrPort(v.String())
-		return addrPort
-	default:
-		return netip.AddrPort{}
+func strToNetIPAddr(str string) netip.Addr {
+	if str == "" {
+		return netip.Addr{}
 	}
+	ip, err := netip.ParseAddr(str)
+	if err == nil {
+		return ip
+	}
+	addr, err := netip.ParseAddrPort(str)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return addr.Addr()
 }

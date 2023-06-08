@@ -189,13 +189,13 @@ func matchClientIP(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 		for _, addrAny := range r.clientIP {
 			switch addr := addrAny.(type) {
 			case netip.Addr:
-				if addr.Compare(dnsCtx.ClientIP.Addr()) == 0 {
+				if addr.Compare(dnsCtx.ClientIP) == 0 {
 					matchStr = addr.String()
 					break
 				}
 				continue
 			case netip.Prefix:
-				if addr.Contains(dnsCtx.ClientIP.Addr()) {
+				if addr.Contains(dnsCtx.ClientIP) {
 					matchStr = addr.String()
 					break
 				}
@@ -204,13 +204,13 @@ func matchClientIP(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 			break
 		}
 		if matchStr == "" && r.invert {
-			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): client_ip => %s", dnsCtx.ClientIP.Addr()))
+			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): client_ip => %s", dnsCtx.ClientIP))
 			return 1
 		} else if matchStr != "" && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): client_ip => %s", matchStr))
 			return 0
 		} else if matchStr == "" && !r.invert {
-			logger.DebugContext(ctx, fmt.Sprintf("no match: client_ip => %s", dnsCtx.ClientIP.Addr()))
+			logger.DebugContext(ctx, fmt.Sprintf("no match: client_ip => %s", dnsCtx.ClientIP))
 			return 0
 		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: client_ip => %s", matchStr))

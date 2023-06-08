@@ -8,7 +8,7 @@ import (
 
 type DNSContext struct {
 	Listener     string
-	ClientIP     netip.AddrPort
+	ClientIP     netip.Addr
 	Mark         uint64
 	MetaData     map[string]any
 	UsedWorkflow []Workflow

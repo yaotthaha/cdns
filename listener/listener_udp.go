@@ -93,6 +93,7 @@ func (l *udpListener) Start() error {
 	waitLock.Lock()
 	l.dnsServer.NotifyStartedFunc = waitLock.Unlock
 	go func() {
+		l.logger.Info(fmt.Sprintf("start udp listener on %s", l.listen.String()))
 		err := l.dnsServer.ActivateAndServe()
 		if err != nil {
 			if tools.IsCloseOrCanceled(err) {
@@ -138,7 +139,7 @@ func (l *udpListener) GetWorkflow() adapter.Workflow {
 
 func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	defer w.Close()
-	ctx, respMsg := handler(l, reqMsg, w.RemoteAddr())
+	ctx, respMsg := handler(l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
 	if respMsg == nil {
 		return
 	}

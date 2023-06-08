@@ -123,6 +123,7 @@ func (l *tlsListener) Start() error {
 	waitLock.Lock()
 	l.dnsServer.NotifyStartedFunc = waitLock.Unlock
 	go func() {
+		l.logger.Info(fmt.Sprintf("start tls listener on %s", l.listen.String()))
 		err := l.dnsServer.ActivateAndServe()
 		if err != nil {
 			if tools.IsCloseOrCanceled(err) {
@@ -161,7 +162,7 @@ func (l *tlsListener) GetWorkflow() adapter.Workflow {
 
 func (l *tlsListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	defer w.Close()
-	ctx, respMsg := handler(l, reqMsg, w.RemoteAddr())
+	ctx, respMsg := handler(l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
 	if respMsg == nil {
 		return
 	}
