@@ -1,7 +1,8 @@
 name: Release
 
 on:
-  workflow_dispatch:
+  release:
+    types: [ created ]
 
 jobs:
   release:
@@ -33,9 +34,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          goversion: "latest"
+          goversion: "1.20.2"
           project_path: "."
-          release_tag: ${{ steps.get_version.outputs.VERSION }}
           binary_name: "cdns"
           build_flags: -v -trimpath
           ldflags: -X 'github.com/yaotthaha/cdns/constant.Version=${{ steps.get_version.outputs.VERSION }}' -X 'github.com/yaotthaha/cdns/constant.Commit=${{ steps.get_commit.outputs.COMMIT }}' -s -w -buildid=
