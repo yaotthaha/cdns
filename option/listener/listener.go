@@ -7,4 +7,5 @@ type ListenerOptions struct {
 	Workflow   string             `yaml:"workflow"`
 	UDPOptions ListenerUDPOptions `yaml:"udp,omitempty"`
 	TCPOptions ListenerTCPOptions `yaml:"tcp,omitempty"`
+	TLSOptions ListenerTLSOptions `yaml:"tls,omitempty"`
 }

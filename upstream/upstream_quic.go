@@ -88,7 +88,13 @@ func NewQUICUpstream(ctx context.Context, logger log.Logger, options upstream.Up
 		}
 	}
 	u.tlsConfig = tlsConfig
-	u.quicConfig = &quic.Config{}
+	u.quicConfig = &quic.Config{
+		TokenStore:                     quic.NewLRUTokenStore(4, 8),
+		InitialStreamReceiveWindow:     4 * 1024,
+		MaxStreamReceiveWindow:         4 * 1024,
+		InitialConnectionReceiveWindow: 8 * 1024,
+		MaxConnectionReceiveWindow:     64 * 1024,
+	}
 	return u, nil
 }
 

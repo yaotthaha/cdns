@@ -32,4 +32,5 @@ const MaxConn = 16
 const (
 	ListenerUDP = "udp"
 	ListenerTCP = "tcp"
+	ListenerTLS = "tls"
 )

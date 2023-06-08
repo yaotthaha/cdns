@@ -21,6 +21,8 @@ func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, opti
 		return NewUDPListener(ctx, core, logger, options)
 	case constant.ListenerTCP:
 		return NewTCPListener(ctx, core, logger, options)
+	case constant.ListenerTLS:
+		return NewTLSListener(ctx, core, logger, options)
 	default:
 		return nil, fmt.Errorf("listener type %s not supported", options.Type)
 	}

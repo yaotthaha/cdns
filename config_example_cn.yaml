@@ -354,3 +354,12 @@ listeners:
     type: udp # 监听器类型，目前支持 tcp/udp
     listen: :53 # 监听地址，格式：IP:Port | :Port
     workflow: main # 触发的工作流程，数据类型：字符串，值为 workflow tag
+
+  - tag: tls
+    type: tls
+    listen: :853
+    workflow: main
+    tls:
+      cert_file: /etc/cdns/server_cert.pem # 证书文件
+      key_file: /etc/cdns/server_key.pem # 私钥文件
+      client_ca_file: /etc/cdns/client_ca.pem # 客户端 CA 文件，用于强制验证客户端证书，可选，不填则不验证

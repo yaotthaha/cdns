@@ -82,7 +82,6 @@ func (l *udpListener) Start() error {
 		return fmt.Errorf("start udp listener fail: listen %s fail: %s", l.listen.String(), err)
 	}
 	l.dnsServer = &dns.Server{
-		Net:          constant.NetworkUDP,
 		PacketConn:   l.udpConn,
 		Handler:      l,
 		ReadTimeout:  30 * time.Second,

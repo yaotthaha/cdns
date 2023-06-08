@@ -77,12 +77,11 @@ func (l *tcpListener) Start() error {
 		return fmt.Errorf("start tcp listener fail: workflow %s not found", l.workflow)
 	}
 	var err error
-	l.tcpListener, err = net.Listen("tcp", l.listen.String())
+	l.tcpListener, err = net.Listen(constant.NetworkTCP, l.listen.String())
 	if err != nil {
 		return fmt.Errorf("start tcp listener fail: %s", err)
 	}
 	l.dnsServer = &dns.Server{
-		Net:          constant.NetworkTCP,
 		Listener:     l.tcpListener,
 		Handler:      l,
 		ReadTimeout:  30 * time.Second,
