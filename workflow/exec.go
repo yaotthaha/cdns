@@ -135,9 +135,8 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 			return false
 		}
 		logger.DebugContext(ctx, fmt.Sprintf("go to => %s", *e.goTo))
-		if !w.Exec(ctx, dnsCtx) {
-			return false
-		}
+		w.Exec(ctx, dnsCtx)
+		return false
 	}
 	if e.clean != nil {
 		if *e.clean {
