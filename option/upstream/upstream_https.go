@@ -6,6 +6,7 @@ import (
 
 type UpstreamHTTPSOption struct {
 	Address            string             `yaml:"address"`
+	QueryTimeout       types.TimeDuration `yaml:"query_timeout,omitempty"`
 	IdleTimeout        types.TimeDuration `yaml:"idle_timeout,omitempty"`
 	URL                string             `yaml:"url"`
 	Header             map[string]string  `yaml:"header,omitempty"`

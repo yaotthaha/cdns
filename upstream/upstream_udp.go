@@ -17,13 +17,14 @@ import (
 )
 
 type udpUpstream struct {
-	ctx         context.Context
-	tag         string
-	logger      log.ContextLogger
-	dialer      NetDialer
-	address     netip.AddrPort
-	idleTimeout time.Duration
-	connPool    *connpool.ConnPool
+	ctx          context.Context
+	tag          string
+	logger       log.ContextLogger
+	dialer       NetDialer
+	address      netip.AddrPort
+	queryTimeout time.Duration
+	idleTimeout  time.Duration
+	connPool     *connpool.ConnPool
 	//
 	tcpIdleTimeout time.Duration
 	tcpConnPool    *connpool.ConnPool
@@ -36,6 +37,11 @@ func NewUDPUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 		ctx:    ctx,
 		tag:    options.Tag,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+	}
+	if options.UDPOption.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(options.UDPOption.QueryTimeout)
+	} else {
+		u.queryTimeout = constant.DNSQueryTimeout
 	}
 	if options.UDPOption.Address == "" {
 		return nil, fmt.Errorf("create udp upstream fail: address is empty")
@@ -129,11 +135,7 @@ func (u *udpUpstream) simpleExchange(ctx context.Context, dnsMsg *dns.Msg) (*dns
 		}
 	}()
 	u.logger.DebugContext(ctx, "write dns message")
-	if deadline, ok := ctx.Deadline(); ok {
-		dnsConn.SetDeadline(deadline)
-	} else {
-		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
-	}
+	dnsConn.SetDeadline(time.Now().Add(u.queryTimeout))
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
 		isClosed = true
@@ -176,11 +178,7 @@ func (u *udpUpstream) tcpFallbackExchange(ctx context.Context, dnsMsg *dns.Msg) 
 		}
 	}()
 	u.logger.DebugContext(ctx, "tcp fallback: write dns message")
-	if deadline, ok := ctx.Deadline(); ok {
-		dnsConn.SetDeadline(deadline)
-	} else {
-		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
-	}
+	dnsConn.SetDeadline(time.Now().Add(u.queryTimeout))
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
 		isClosed = true

@@ -17,13 +17,14 @@ import (
 )
 
 type tcpUpstream struct {
-	ctx         context.Context
-	tag         string
-	logger      log.ContextLogger
-	dialer      NetDialer
-	address     netip.AddrPort
-	idleTimeout time.Duration
-	connPool    *connpool.ConnPool
+	ctx          context.Context
+	tag          string
+	logger       log.ContextLogger
+	dialer       NetDialer
+	address      netip.AddrPort
+	queryTimeout time.Duration
+	idleTimeout  time.Duration
+	connPool     *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*tcpUpstream)(nil)
@@ -33,6 +34,11 @@ func NewTCPUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 		ctx:    ctx,
 		tag:    options.Tag,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+	}
+	if options.TCPOption.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(options.TCPOption.QueryTimeout)
+	} else {
+		u.queryTimeout = constant.DNSQueryTimeout
 	}
 	if options.TCPOption.Address == "" {
 		return nil, fmt.Errorf("create tcp upstream fail: address is empty")
@@ -113,11 +119,7 @@ func (u *tcpUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 		}
 	}()
 	u.logger.DebugContext(ctx, "write dns message")
-	if deadline, ok := ctx.Deadline(); ok {
-		dnsConn.SetDeadline(deadline)
-	} else {
-		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
-	}
+	dnsConn.SetDeadline(time.Now().Add(u.queryTimeout))
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
 		isClosed = true

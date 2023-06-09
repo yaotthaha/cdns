@@ -5,6 +5,7 @@ import (
 )
 
 type UpstreamUDPOption struct {
-	Address     string             `yaml:"address"`
-	IdleTimeout types.TimeDuration `yaml:"idle_timeout,omitempty"`
+	Address      string             `yaml:"address"`
+	QueryTimeout types.TimeDuration `yaml:"query_timeout,omitempty"`
+	IdleTimeout  types.TimeDuration `yaml:"idle_timeout,omitempty"`
 }

@@ -11,5 +11,6 @@ type UpstreamTLSOption struct {
 	CAFile             string             `yaml:"ca_file,omitempty"`
 	ClientCertFile     string             `yaml:"client_cert_file,omitempty"`
 	ClientKeyFile      string             `yaml:"client_key_file,omitempty"`
+	QueryTimeout       types.TimeDuration `yaml:"query_timeout,omitempty"`
 	IdleTimeout        types.TimeDuration `yaml:"idle_timeout,omitempty"`
 }

@@ -20,14 +20,15 @@ import (
 )
 
 type tlsUpstream struct {
-	ctx         context.Context
-	tag         string
-	logger      log.ContextLogger
-	dialer      NetDialer
-	address     netip.AddrPort
-	idleTimeout time.Duration
-	tlsConfig   *tls.Config
-	connPool    *connpool.ConnPool
+	ctx          context.Context
+	tag          string
+	logger       log.ContextLogger
+	dialer       NetDialer
+	address      netip.AddrPort
+	queryTimeout time.Duration
+	idleTimeout  time.Duration
+	tlsConfig    *tls.Config
+	connPool     *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*tlsUpstream)(nil)
@@ -37,6 +38,11 @@ func NewTLSUpstream(ctx context.Context, logger log.Logger, options upstream.Ups
 		ctx:    ctx,
 		tag:    options.Tag,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+	}
+	if options.TLSOption.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(options.TLSOption.QueryTimeout)
+	} else {
+		u.queryTimeout = constant.DNSQueryTimeout
 	}
 	if options.TLSOption.Address == "" {
 		return nil, fmt.Errorf("create tls upstream fail: address is empty")
@@ -152,11 +158,7 @@ func (u *tlsUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, 
 		}
 	}()
 	u.logger.DebugContext(ctx, "write dns message")
-	if deadline, ok := ctx.Deadline(); ok {
-		dnsConn.SetDeadline(deadline)
-	} else {
-		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
-	}
+	dnsConn.SetDeadline(time.Now().Add(u.queryTimeout))
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
 		isClosed = true

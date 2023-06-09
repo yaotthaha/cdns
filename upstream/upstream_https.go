@@ -25,15 +25,16 @@ import (
 )
 
 type httpsUpstream struct {
-	ctx        context.Context
-	tag        string
-	logger     log.ContextLogger
-	dialer     NetDialer
-	address    netip.AddrPort
-	httpClient *http.Client
-	useH3      bool
-	url        *url.URL
-	header     http.Header
+	ctx          context.Context
+	tag          string
+	logger       log.ContextLogger
+	dialer       NetDialer
+	address      netip.AddrPort
+	httpClient   *http.Client
+	useH3        bool
+	url          *url.URL
+	header       http.Header
+	queryTimeout time.Duration
 }
 
 var _ adapter.Upstream = (*httpsUpstream)(nil)
@@ -43,6 +44,11 @@ func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.U
 		ctx:    ctx,
 		tag:    options.Tag,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+	}
+	if options.HTTPSOption.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(options.HTTPSOption.QueryTimeout)
+	} else {
+		u.queryTimeout = constant.DNSQueryTimeout
 	}
 	if options.HTTPSOption.Address == "" {
 		return nil, fmt.Errorf("create https upstream fail: address is empty")
@@ -193,7 +199,9 @@ func (u *httpsUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg
 	}
 	req.Header.Set("Content-Type", "application/dns-message")
 	req.Header.Set("Accept", "application/dns-message")
-	req = req.WithContext(ctx)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, u.queryTimeout)
+	defer timeoutCancel()
+	req = req.WithContext(timeoutCtx)
 	u.logger.DebugContext(ctx, fmt.Sprintf("send http request"))
 	resp, err := u.httpClient.Do(req)
 	if err != nil {

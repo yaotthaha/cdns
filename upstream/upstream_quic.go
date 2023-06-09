@@ -26,6 +26,7 @@ type quicUpstream struct {
 	logger       log.ContextLogger
 	dialer       NetDialer
 	address      netip.AddrPort
+	queryTimeout time.Duration
 	idleTimeout  time.Duration
 	tlsConfig    *tls.Config
 	quicConfig   *quic.Config
@@ -40,6 +41,11 @@ func NewQUICUpstream(ctx context.Context, logger log.Logger, options upstream.Up
 		ctx:    ctx,
 		tag:    options.Tag,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+	}
+	if options.QUICOption.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(options.QUICOption.QueryTimeout)
+	} else {
+		u.queryTimeout = constant.DNSQueryTimeout
 	}
 	if options.QUICOption.Address == "" {
 		return nil, fmt.Errorf("create quic upstream fail: address is empty")
@@ -190,11 +196,8 @@ func (u *quicUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg,
 	dnsConn := &dns.Conn{Conn: newQUICConn(steam)}
 	defer dnsConn.Close()
 	u.logger.DebugContext(ctx, "write dns message")
-	if deadline, ok := ctx.Deadline(); ok {
-		dnsConn.SetDeadline(deadline)
-	} else {
-		dnsConn.SetDeadline(time.Now().Add(10 * time.Second))
-	}
+	dnsConn.SetDeadline(time.Now().Add(u.queryTimeout))
+	defer dnsConn.SetDeadline(time.Time{})
 	err = dnsConn.WriteMsg(dnsMsg)
 	if err != nil {
 		err = fmt.Errorf("write dns message fail: %s", err)

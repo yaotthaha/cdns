@@ -27,6 +27,8 @@ const (
 	UDPIdleTimeout = 5 * time.Minute
 )
 
+const DNSQueryTimeout = 10 * time.Second
+
 const MaxConn = 16
 
 const (
