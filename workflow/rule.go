@@ -146,7 +146,6 @@ func (r *Rule) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adap
 					continue
 				}
 			default:
-				logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, continue", r.mode))
 				return 0
 			}
 		}
@@ -154,11 +153,9 @@ func (r *Rule) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adap
 		case modeAnd:
 		case modeOr:
 			if orN == 0 {
-				logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, continue", r.mode))
 				return 0
 			}
 		}
-		logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, run exec", r.mode))
 		return 1
 	}
 	return 1
