@@ -343,7 +343,6 @@ func (l *httpListener) parseNetAddr(addr string) *netAddr {
 	}
 }
 
-// from mosdns
 func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	remoteAddrPort, err := netip.ParseAddrPort(r.RemoteAddr)
@@ -414,6 +413,7 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var rawDNSMsg []byte
+	// from mosdns(https://github.com/IrineSistiana/mosdns), thank for @IrineSistiana
 	switch r.Method {
 	case http.MethodGet:
 		s := r.URL.Query().Get("dns")

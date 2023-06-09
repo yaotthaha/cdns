@@ -2,7 +2,7 @@ package tools
 
 import "github.com/miekg/dns"
 
-// from mosdns
+// from mosdns(https://github.com/IrineSistiana/mosdns), thank for @IrineSistiana
 func FakeSOA(name string) *dns.SOA {
 	if name == "" {
 		name = "."

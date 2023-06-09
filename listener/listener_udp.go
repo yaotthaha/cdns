@@ -143,6 +143,7 @@ func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	if respMsg == nil {
 		return
 	}
+	// from mosdns(https://github.com/IrineSistiana/mosdns), thank for @IrineSistiana
 	respMsg.Truncate(getUDPSize(reqMsg))
 	err := w.WriteMsg(respMsg)
 	if err != nil {
@@ -151,7 +152,7 @@ func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	}
 }
 
-// from mosdns
+// from mosdns(https://github.com/IrineSistiana/mosdns), thank for @IrineSistiana
 func getUDPSize(m *dns.Msg) int {
 	var s uint16
 	if opt := m.IsEdns0(); opt != nil {

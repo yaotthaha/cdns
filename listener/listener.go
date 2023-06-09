@@ -56,13 +56,6 @@ func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.
 		}
 		dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 	}
-	/**
-	qStrs := make([]string, len(dnsCtx.RespMsg.Question))
-	for i, q := range dnsCtx.RespMsg.Question {
-		qStrs[i] = q.String()
-	}
-	logger.DebugContext(ctx, fmt.Sprintf("response: question: [%s], answers: [%s]", strings.Join(qStrs, " | "), tools.Join(dnsCtx.RespMsg.Answer, " | ")))
-	*/
 	return ctx, dnsCtx.RespMsg
 }
 
