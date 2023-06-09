@@ -157,14 +157,29 @@ func (r *Rule) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adap
 			}
 		}
 		return 1
+	} else {
+		return 2
 	}
-	return 1
 }
 
 func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
 	m := r.match(ctx, logger, dnsCtx)
 	if m == -1 {
 		return false
+	}
+	if m == 2 {
+		logger.DebugContext(ctx, "run exec")
+		for _, e := range r.execs {
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+			}
+			if !e.exec(ctx, logger, dnsCtx) {
+				return false
+			}
+		}
+		return true
 	}
 	if m == 0 {
 		if r.elseExecs != nil {
@@ -186,7 +201,7 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 		}
 	}
 	if m == 1 {
-		if r.elseExecs != nil {
+		if r.execs != nil {
 			logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, run exec", r.mode))
 			for _, e := range r.execs {
 				select {
