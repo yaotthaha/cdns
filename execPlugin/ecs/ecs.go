@@ -51,7 +51,6 @@ func NewECS(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 		return nil, fmt.Errorf("parse args fail: %s", err)
 	}
 
-	var done bool
 	if op.IP4 != "" {
 		ip, err := netip.ParseAddr(op.IP4)
 		if err != nil {
@@ -65,7 +64,6 @@ func NewECS(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 			mask4 = int(op.Mask4)
 		}
 		e.prefix4 = netip.PrefixFrom(ip, mask4)
-		done = true
 	}
 	if op.IP6 != "" {
 		ip, err := netip.ParseAddr(op.IP6)
@@ -80,11 +78,6 @@ func NewECS(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 			mask6 = int(op.Mask6)
 		}
 		e.prefix6 = netip.PrefixFrom(ip, mask6)
-		done = true
-	}
-
-	if !done {
-		return nil, fmt.Errorf("invalid args")
 	}
 
 	return e, nil
@@ -122,33 +115,63 @@ func (e *ECS) APIHandler() http.Handler {
 
 func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
 	reqMsg := dnsCtx.ReqMsg
-	if reqMsg.Question[0].Qtype == dns.TypeA && e.prefix4.IsValid() {
-		o := new(dns.OPT)
-		o.Hdr.Name = "."
-		o.Hdr.Rrtype = dns.TypeOPT
-		es := new(dns.EDNS0_SUBNET)
-		es.Code = dns.EDNS0SUBNET
-		es.Family = 1
-		es.SourceNetmask = uint8(e.prefix4.Bits())
-		es.SourceScope = 0
-		es.Address = e.prefix4.Masked().Addr().AsSlice()
-		o.Option = append(o.Option, es)
-		reqMsg.Extra = append(reqMsg.Extra, o)
-		e.logger.DebugContext(ctx, fmt.Sprintf("add ecs: ip: %s, mask: %d", e.prefix4.Masked().Addr().String(), e.prefix4.Bits()))
+	if reqMsg.Question[0].Qtype == dns.TypeA {
+		if e.prefix4.IsValid() {
+			o := new(dns.OPT)
+			o.Hdr.Name = "."
+			o.Hdr.Rrtype = dns.TypeOPT
+			es := new(dns.EDNS0_SUBNET)
+			es.Code = dns.EDNS0SUBNET
+			es.Family = 1
+			es.SourceNetmask = uint8(e.prefix4.Bits())
+			es.SourceScope = 0
+			es.Address = e.prefix4.Masked().Addr().AsSlice()
+			o.Option = append(o.Option, es)
+			reqMsg.Extra = append(reqMsg.Extra, o)
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs: ip: %s, mask: %d", e.prefix4.Masked().Addr().String(), e.prefix4.Bits()))
+		} else if dnsCtx.ClientIP.Is4() {
+			o := new(dns.OPT)
+			o.Hdr.Name = "."
+			o.Hdr.Rrtype = dns.TypeOPT
+			es := new(dns.EDNS0_SUBNET)
+			es.Code = dns.EDNS0SUBNET
+			es.Family = 1
+			es.SourceNetmask = 32
+			es.SourceScope = 0
+			es.Address = dnsCtx.ClientIP.AsSlice()
+			o.Option = append(o.Option, es)
+			reqMsg.Extra = append(reqMsg.Extra, o)
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client_ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 32))
+		}
 	}
-	if reqMsg.Question[0].Qtype == dns.TypeAAAA && e.prefix6.IsValid() {
-		o := new(dns.OPT)
-		o.Hdr.Name = "."
-		o.Hdr.Rrtype = dns.TypeOPT
-		es := new(dns.EDNS0_SUBNET)
-		es.Code = dns.EDNS0SUBNET
-		es.Family = 2
-		es.SourceNetmask = uint8(e.prefix6.Bits())
-		es.SourceScope = 0
-		es.Address = e.prefix6.Masked().Addr().AsSlice()
-		o.Option = append(o.Option, es)
-		reqMsg.Extra = append(reqMsg.Extra, o)
-		e.logger.DebugContext(ctx, fmt.Sprintf("add ecs: ip: %s, mask: %d", e.prefix6.Masked().Addr().String(), e.prefix6.Bits()))
+	if reqMsg.Question[0].Qtype == dns.TypeAAAA {
+		if e.prefix6.IsValid() {
+			o := new(dns.OPT)
+			o.Hdr.Name = "."
+			o.Hdr.Rrtype = dns.TypeOPT
+			es := new(dns.EDNS0_SUBNET)
+			es.Code = dns.EDNS0SUBNET
+			es.Family = 2
+			es.SourceNetmask = uint8(e.prefix6.Bits())
+			es.SourceScope = 0
+			es.Address = e.prefix6.Masked().Addr().AsSlice()
+			o.Option = append(o.Option, es)
+			reqMsg.Extra = append(reqMsg.Extra, o)
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs: ip: %s, mask: %d", e.prefix6.Masked().Addr().String(), e.prefix6.Bits()))
+		} else if dnsCtx.ClientIP.Is6() {
+			o := new(dns.OPT)
+			o.Hdr.Name = "."
+			o.Hdr.Rrtype = dns.TypeOPT
+			es := new(dns.EDNS0_SUBNET)
+			es.Code = dns.EDNS0SUBNET
+			es.Family = 2
+			es.SourceNetmask = 128
+			es.SourceScope = 0
+			es.Address = dnsCtx.ClientIP.AsSlice()
+			o.Option = append(o.Option, es)
+			reqMsg.Extra = append(reqMsg.Extra, o)
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client_ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 128))
+		}
 	}
 	return true
 }
