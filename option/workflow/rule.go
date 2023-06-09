@@ -5,12 +5,14 @@ import (
 )
 
 type RuleMatchOr struct {
-	MatchOr types.Listable[RuleMatchItem] `yaml:"match_or"`
-	Exec    types.Listable[RuleExecItem]  `yaml:"exec"`
+	MatchOr  types.Listable[RuleMatchItem] `yaml:"match_or"`
+	ElseExec types.Listable[RuleExecItem]  `yaml:"else_exec"`
+	Exec     types.Listable[RuleExecItem]  `yaml:"exec"`
 }
 
 type RuleMatchAnd struct {
 	MatchAnd types.Listable[RuleMatchItem] `yaml:"match_and"`
+	ElseExec types.Listable[RuleExecItem]  `yaml:"else_exec"`
 	Exec     types.Listable[RuleExecItem]  `yaml:"exec"`
 }
 

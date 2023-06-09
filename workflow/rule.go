@@ -15,10 +15,11 @@ const (
 )
 
 type Rule struct {
-	core     adapter.Core
-	mode     string
-	matchers []*matchItem
-	execs    []*execItem
+	core      adapter.Core
+	mode      string
+	matchers  []*matchItem
+	elseExecs []*execItem
+	execs     []*execItem
 }
 
 func newRule(core adapter.Core, options any) (*Rule, error) {
@@ -36,15 +37,34 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			matchers = append(matchers, m)
 		}
 		r.matchers = matchers
-		execs := make([]*execItem, 0)
-		for _, eItem := range options.Exec {
-			e, err := newExecItem(core, eItem)
-			if err != nil {
-				return nil, fmt.Errorf("init matcher_or rule fail, module: exec: %s", err)
+		ee := false
+		if options.ElseExec != nil && len(options.ElseExec) > 0 {
+			execs := make([]*execItem, 0)
+			for _, eItem := range options.ElseExec {
+				e, err := newExecItem(core, eItem)
+				if err != nil {
+					return nil, fmt.Errorf("init matcher_or rule fail, module: else_exec: %s", err)
+				}
+				execs = append(execs, e)
 			}
-			execs = append(execs, e)
+			r.elseExecs = execs
+			ee = true
 		}
-		r.execs = execs
+		if options.Exec != nil && len(options.Exec) > 0 {
+			execs := make([]*execItem, 0)
+			for _, eItem := range options.Exec {
+				e, err := newExecItem(core, eItem)
+				if err != nil {
+					return nil, fmt.Errorf("init matcher_or rule fail, module: exec: %s", err)
+				}
+				execs = append(execs, e)
+			}
+			r.execs = execs
+			ee = true
+		}
+		if !ee {
+			return nil, fmt.Errorf("init matcher_or rule fail, module: no exec or else_exec")
+		}
 		r.mode = modeOr
 	case *workflow.RuleMatchAnd:
 		matchers := make([]*matchItem, 0)
@@ -56,15 +76,34 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			matchers = append(matchers, m)
 		}
 		r.matchers = matchers
-		execs := make([]*execItem, 0)
-		for _, eItem := range options.Exec {
-			e, err := newExecItem(core, eItem)
-			if err != nil {
-				return nil, fmt.Errorf("init matcher_and rule fail, module: exec: %s", err)
+		ee := false
+		if options.ElseExec != nil && len(options.ElseExec) > 0 {
+			execs := make([]*execItem, 0)
+			for _, eItem := range options.ElseExec {
+				e, err := newExecItem(core, eItem)
+				if err != nil {
+					return nil, fmt.Errorf("init matcher_and rule fail, module: else_exec: %s", err)
+				}
+				execs = append(execs, e)
 			}
-			execs = append(execs, e)
+			r.elseExecs = execs
+			ee = true
 		}
-		r.execs = execs
+		if options.Exec != nil && len(options.Exec) > 0 {
+			execs := make([]*execItem, 0)
+			for _, eItem := range options.Exec {
+				e, err := newExecItem(core, eItem)
+				if err != nil {
+					return nil, fmt.Errorf("init matcher_and rule fail, module: exec: %s", err)
+				}
+				execs = append(execs, e)
+			}
+			r.execs = execs
+			ee = true
+		}
+		if !ee {
+			return nil, fmt.Errorf("init matcher_and rule fail, module: no exec or else_exec")
+		}
 		r.mode = modeAnd
 	case *workflow.RuleExec:
 		execs := make([]*execItem, 0)
@@ -82,13 +121,13 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 	return r, nil
 }
 
-func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
+func (r *Rule) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) int {
 	if r.matchers != nil {
 		orN := 0
 		for _, matcher := range r.matchers {
 			select {
 			case <-ctx.Done():
-				return false
+				return -1
 			default:
 			}
 			match := matcher.match(ctx, logger, dnsCtx)
@@ -97,8 +136,7 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 				if match {
 					continue
 				} else {
-					logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, continue", r.mode))
-					return true
+					return 0
 				}
 			case modeOr:
 				if match {
@@ -109,7 +147,7 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 				}
 			default:
 				logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, continue", r.mode))
-				return true
+				return 0
 			}
 		}
 		switch r.mode {
@@ -117,20 +155,57 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 		case modeOr:
 			if orN == 0 {
 				logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, continue", r.mode))
-				return true
+				return 0
 			}
 		}
 		logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, run exec", r.mode))
+		return 1
 	}
-	for _, e := range r.execs {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-		}
-		if !e.exec(ctx, logger, dnsCtx) {
-			return false
+	return 1
+}
+
+func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
+	m := r.match(ctx, logger, dnsCtx)
+	if m == -1 {
+		return false
+	}
+	if m == 0 {
+		if r.elseExecs != nil {
+			logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, run else_exec", r.mode))
+			for _, e := range r.elseExecs {
+				select {
+				case <-ctx.Done():
+					return false
+				default:
+				}
+				if !e.exec(ctx, logger, dnsCtx) {
+					return false
+				}
+			}
+			return true
+		} else {
+			logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, else_exec has no rule, continue", r.mode))
+			return true
 		}
 	}
-	return true
+	if m == 1 {
+		if r.elseExecs != nil {
+			logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, run exec", r.mode))
+			for _, e := range r.execs {
+				select {
+				case <-ctx.Done():
+					return false
+				default:
+				}
+				if !e.exec(ctx, logger, dnsCtx) {
+					return false
+				}
+			}
+			return true
+		} else {
+			logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, exec has no rule, continue", r.mode))
+			return true
+		}
+	}
+	return false
 }
