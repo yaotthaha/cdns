@@ -21,15 +21,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*Host)(nil)
+var _ adapter.ExecPlugin = (*Hosts)(nil)
 
-const PluginType = "host"
+const PluginType = "hosts"
 
 func init() {
-	adapter.RegisterExecPlugin(PluginType, NewHost)
+	adapter.RegisterExecPlugin(PluginType, NewHosts)
 }
 
-type Host struct {
+type Hosts struct {
 	tag        string
 	logger     log.ContextLogger
 	insideRule *map[*rule][]netip.Addr
@@ -43,8 +43,8 @@ type option struct {
 	File types.Listable[string] `yaml:"file"`
 }
 
-func NewHost(tag string, args map[string]any) (adapter.ExecPlugin, error) {
-	h := &Host{
+func NewHosts(tag string, args map[string]any) (adapter.ExecPlugin, error) {
+	h := &Hosts{
 		tag: tag,
 	}
 	optionBytes, err := yaml.Marshal(args)
@@ -70,20 +70,20 @@ func NewHost(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	return h, nil
 }
 
-func (h *Host) Tag() string {
+func (h *Hosts) Tag() string {
 	return h.tag
 }
 
-func (h *Host) Type() string {
+func (h *Hosts) Type() string {
 	return PluginType
 }
 
-func (h *Host) Start() error {
+func (h *Hosts) Start() error {
 	rules := make([]*map[*rule][]netip.Addr, 0)
 	for _, f := range h.file {
 		ru, err := loadHostFile(f)
 		if err != nil {
-			return fmt.Errorf("load host file %s fail: %s", f, err)
+			return fmt.Errorf("load hosts file %s fail: %s", f, err)
 		}
 		rules = append(rules, ru)
 	}
@@ -93,21 +93,21 @@ func (h *Host) Start() error {
 	return nil
 }
 
-func (h *Host) Close() error {
+func (h *Hosts) Close() error {
 	return nil
 }
 
-func (h *Host) WithContext(_ context.Context) {
+func (h *Hosts) WithContext(_ context.Context) {
 }
 
-func (h *Host) WithLogger(logger log.ContextLogger) {
+func (h *Hosts) WithLogger(logger log.ContextLogger) {
 	h.logger = logger
 }
 
-func (h *Host) WithCore(_ adapter.ExecPluginCore) {
+func (h *Hosts) WithCore(_ adapter.ExecPluginCore) {
 }
 
-func (h *Host) APIHandler() http.Handler {
+func (h *Hosts) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -116,7 +116,7 @@ func (h *Host) APIHandler() http.Handler {
 	return r
 }
 
-func (h *Host) reloadRule() {
+func (h *Hosts) reloadRule() {
 	if !h.reloadLock.TryLock() {
 		return
 	}
@@ -126,7 +126,7 @@ func (h *Host) reloadRule() {
 	for _, f := range h.file {
 		ru, err := loadHostFile(f)
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("load host file %s fail: %s", f, err))
+			h.logger.Error(fmt.Sprintf("load hosts file %s fail: %s", f, err))
 			continue
 		}
 		rules = append(rules, ru)
@@ -136,7 +136,7 @@ func (h *Host) reloadRule() {
 	h.logger.Info(fmt.Sprintf("reload rule success: %d", len(*rule)))
 }
 
-func (h *Host) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (h *Hosts) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
 	switch dnsCtx.ReqMsg.Question[0].Qtype {
 	case dns.TypeA:
 	case dns.TypeAAAA:

@@ -48,6 +48,9 @@ func run() int {
 	if options.LogOption.Debug {
 		logger.SetDebug(true)
 	}
+	if options.LogOption.DisableTimestamp {
+		logger.SetFormatFunc(log.DisableTimestampFormatFunc)
+	}
 	if options.LogOption.File != "" {
 		err := os.Remove(options.LogOption.File)
 		if err != nil && !os.IsNotExist(err) {

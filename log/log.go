@@ -25,8 +25,12 @@ const (
 	Fatal Level = "Fatal"
 )
 
-func defaultFormatFunc(level, s string) string {
+func DefaultFormatFunc(level, s string) string {
 	return fmt.Sprintf("[%s] [%s] %s", time.Now().Format(time.DateTime), level, s)
+}
+
+func DisableTimestampFormatFunc(level, s string) string {
+	return fmt.Sprintf("[%s] %s", level, s)
 }
 
 type ContextLogger interface {

@@ -6,88 +6,107 @@ import (
 	"errors"
 	"net/netip"
 	"time"
+
+	"github.com/vishvananda/netlink"
 )
 
+var _ IPSet = (*IPSetLinux)(nil)
+
 type IPSetLinux struct {
-	name string
-	tye  InetType
-	nl   *NetLink
+	name    string
+	typ     InetType
+	handler *netlink.Handle
 }
 
 var ErrInetMismatch = errors.New("ipset: address family mismatch")
 
 func New(name string, typ InetType) (*IPSetLinux, error) {
-	nl, err := NewNetLink()
+	handler, err := netlink.NewHandle()
 	if err != nil {
 		return nil, err
 	}
-	err = nl.CreateSet(name, func(opts *Options) {
-		if typ == Inet6 {
-			opts.IPv6 = true
-		}
+	err = handler.IpsetCreate(name, "hash:net", netlink.IpsetCreateOptions{
+		Replace: true,
+		Skbinfo: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &IPSetLinux{
-		name: name,
-		tye:  typ,
-		nl:   nl,
+		name:    name,
+		typ:     typ,
+		handler: handler,
 	}, nil
 }
 
-func (i *IPSetLinux) Destroy() error {
-	return i.nl.DestroySet(i.name)
+func (i *IPSetLinux) Name() string {
+	return i.name
 }
 
 func (i *IPSetLinux) AddIP(addr netip.Addr, ttl time.Duration) error {
-	if addr.Is4() && i.tye == Inet6 {
+	if addr.Is4() && i.typ == Inet6 {
 		return ErrInetMismatch
 	}
-	if addr.Is6() && i.tye == Inet4 {
+	if addr.Is6() && i.typ == Inet4 {
 		return ErrInetMismatch
 	}
-	return i.nl.HandleAddr(IPSET_CMD_ADD, i.name, addr, netip.Prefix{}, func(opts *Options) {
-		if ttl > 0 {
-			opts.Timeout = uint32(ttl.Seconds())
-		}
-	})
+	e := &netlink.IPSetEntry{
+		Replace: true,
+		IP:      addr.AsSlice(),
+	}
+	ttlUint32 := uint32(ttl.Seconds())
+	if ttl > 0 {
+		e.Timeout = &ttlUint32
+	}
+	return i.handler.IpsetAdd(i.name, e)
 }
 
 func (i *IPSetLinux) AddCIDR(addr netip.Prefix, ttl time.Duration) error {
-	if addr.Addr().Is4() && i.tye == Inet6 {
+	if addr.Addr().Is4() && i.typ == Inet6 {
 		return ErrInetMismatch
 	}
-	if addr.Addr().Is6() && i.tye == Inet4 {
+	if addr.Addr().Is6() && i.typ == Inet4 {
 		return ErrInetMismatch
 	}
-	return i.nl.HandleAddr(IPSET_CMD_ADD, i.name, addr.Addr(), addr, func(opts *Options) {
-		if ttl > 0 {
-			opts.Timeout = uint32(ttl.Seconds())
-		}
-	})
+	e := &netlink.IPSetEntry{
+		Replace: true,
+		IP:      addr.Addr().AsSlice(),
+		CIDR:    uint8(addr.Bits()),
+	}
+	ttlUint32 := uint32(ttl.Seconds())
+	if ttl > 0 {
+		e.Timeout = &ttlUint32
+	}
+	return i.handler.IpsetAdd(i.name, e)
 }
 
 func (i *IPSetLinux) DelIP(addr netip.Addr) error {
-	if addr.Is4() && i.tye == Inet6 {
+	if addr.Is4() && i.typ == Inet6 {
 		return ErrInetMismatch
 	}
-	if addr.Is6() && i.tye == Inet4 {
+	if addr.Is6() && i.typ == Inet4 {
 		return ErrInetMismatch
 	}
-	return i.nl.HandleAddr(IPSET_CMD_DEL, i.name, addr, netip.Prefix{})
+	e := &netlink.IPSetEntry{
+		IP: addr.AsSlice(),
+	}
+	return i.handler.IpsetDel(i.name, e)
 }
 
 func (i *IPSetLinux) DelCIDR(addr netip.Prefix) error {
-	if addr.Addr().Is4() && i.tye == Inet6 {
+	if addr.Addr().Is4() && i.typ == Inet6 {
 		return ErrInetMismatch
 	}
-	if addr.Addr().Is6() && i.tye == Inet4 {
+	if addr.Addr().Is6() && i.typ == Inet4 {
 		return ErrInetMismatch
 	}
-	return i.nl.HandleAddr(IPSET_CMD_DEL, i.name, addr.Addr(), addr)
+	e := &netlink.IPSetEntry{
+		IP:   addr.Addr().AsSlice(),
+		CIDR: uint8(addr.Bits()),
+	}
+	return i.handler.IpsetDel(i.name, e)
 }
 
 func (i *IPSetLinux) FlushAll() error {
-	return i.nl.FlushSet(i.name)
+	return i.handler.IpsetFlush(i.name)
 }

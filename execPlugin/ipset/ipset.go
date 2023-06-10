@@ -198,15 +198,17 @@ func (i *IPSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSC
 				cidr := netip.PrefixFrom(rr.addr, int(i.option.Mask4)).Masked()
 				err := i.ipset4.AddCIDR(cidr, ttl)
 				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to ipset4 fail: %s", cidr.String(), err))
+					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to %s fail: %s", cidr.String(), i.ipset4.Name(), err))
+				} else {
+					i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to %s, ttl: %s", cidr.String(), i.ipset4.Name(), ttl.String()))
 				}
-				i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to ipset4", cidr.String()))
 			} else {
 				err := i.ipset4.AddIP(rr.addr, ttl)
 				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to ipset4 fail: %s", rr.addr.String(), err))
+					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to %s fail: %s", rr.addr.String(), i.ipset4.Name(), err))
+				} else {
+					i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to %s, ttl: %s", rr.addr.String(), i.ipset4.Name(), ttl.String()))
 				}
-				i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to ipset4", rr.addr.String()))
 			}
 		}
 	}
@@ -220,15 +222,17 @@ func (i *IPSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSC
 				cidr := netip.PrefixFrom(rr.addr, int(i.option.Mask6)).Masked()
 				err := i.ipset6.AddCIDR(cidr, ttl)
 				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to ipset6 fail: %s", cidr.String(), err))
+					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to %s fail: %s", cidr.String(), i.ipset6.Name(), err))
+				} else {
+					i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to %s, ttl: %s", cidr.String(), i.ipset6.Name(), ttl.String()))
 				}
-				i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to ipset6", cidr.String()))
 			} else {
 				err := i.ipset6.AddIP(rr.addr, ttl)
 				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to ipset6 fail: %s", rr.addr.String(), err))
+					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to %s fail: %s", rr.addr.String(), i.ipset6.Name(), err))
+				} else {
+					i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to %s, ttl: %s", rr.addr.String(), i.ipset6.Name(), ttl.String()))
 				}
-				i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to ipset6", rr.addr.String()))
 			}
 		}
 	}

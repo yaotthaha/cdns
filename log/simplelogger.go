@@ -23,7 +23,7 @@ type SimpleLogger struct {
 func NewLogger() *SimpleLogger {
 	s := &SimpleLogger{
 		output:     os.Stdout,
-		formatFunc: defaultFormatFunc,
+		formatFunc: DefaultFormatFunc,
 	}
 	return s
 }

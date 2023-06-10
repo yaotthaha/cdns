@@ -13,6 +13,7 @@ const (
 )
 
 type IPSet interface {
+	Name() string
 	AddIP(netip.Addr, time.Duration) error
 	AddCIDR(netip.Prefix, time.Duration) error
 	DelIP(netip.Addr) error
