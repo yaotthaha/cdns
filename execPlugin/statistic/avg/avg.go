@@ -32,3 +32,16 @@ func (a *Avg[T]) Load() float64 {
 	defer a.lock.RUnlock()
 	return a.avg
 }
+
+func (a *Avg[T]) TotalCount() uint64 {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.totalCount
+}
+
+func (a *Avg[T]) Reset() {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	a.totalCount = 0
+	a.avg = 0
+}

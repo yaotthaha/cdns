@@ -61,9 +61,6 @@ func (s *Statistic) Start() error {
 	s.upstreamAvgTime = safemap.NewSafeMap[adapter.Upstream, *avg.Avg[int64]]()
 	for _, upstream := range upstreams {
 		s.upstreamMap[upstream.Tag()] = upstream
-		s.upstreamTotalQueryCount.Set(upstream, new(atomic.Uint64))
-		s.upstreamFailQueryCount.Set(upstream, new(atomic.Uint64))
-		s.upstreamAvgTime.Set(upstream, avg.NewAvg[int64]())
 	}
 	return nil
 }
@@ -94,6 +91,7 @@ func (s *Statistic) APIHandler() http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(info)
 	})
@@ -126,6 +124,10 @@ func (s *Statistic) APIHandler() http.Handler {
 			}
 		}
 	}))
+	c.Get("/clean", func(w http.ResponseWriter, r *http.Request) {
+		go s.clean()
+		w.WriteHeader(http.StatusNoContent)
+	})
 	return c
 }
 
@@ -136,6 +138,7 @@ type info struct {
 
 type upstreamInfo struct {
 	Tag     string `json:"tag"`
+	Type    string `json:"type"`
 	Total   uint64 `json:"total"`
 	Fail    uint64 `json:"fail"`
 	AvgTime uint64 `json:"avg_time"`
@@ -145,17 +148,47 @@ func (s *Statistic) getInfo() info {
 	total := s.totalQueryCount.Load()
 	upstreamInfos := make([]upstreamInfo, 0)
 	for _, upstream := range s.upstreamMap {
+		var (
+			total   uint64
+			fail    uint64
+			avgTime uint64
+		)
+		tqc := s.upstreamTotalQueryCount.Get(upstream)
+		if tqc != nil {
+			total = tqc.Load()
+		}
+		fqc := s.upstreamFailQueryCount.Get(upstream)
+		if fqc != nil {
+			fail = fqc.Load()
+		}
+		at := s.upstreamAvgTime.Get(upstream)
+		if at != nil {
+			avgTime = uint64(at.Load())
+		}
+		if total == 0 && fail == 0 && avgTime == 0 {
+			continue
+		}
 		info := upstreamInfo{
 			Tag:     upstream.Tag(),
-			Total:   s.upstreamTotalQueryCount.Get(upstream).Load(),
-			Fail:    s.upstreamFailQueryCount.Get(upstream).Load(),
-			AvgTime: uint64(s.upstreamAvgTime.Get(upstream).Load()),
+			Type:    upstream.Type(),
+			Total:   total,
+			Fail:    fail,
+			AvgTime: avgTime,
 		}
 		upstreamInfos = append(upstreamInfos, info)
 	}
 	return info{
 		Total:    total,
 		Upstream: upstreamInfos,
+	}
+}
+
+func (s *Statistic) clean() {
+	s.totalQueryCount.Store(0)
+	for _, upstream := range s.upstreamMap {
+		s.upstreamTotalQueryCount.Get(upstream).Store(0)
+		s.upstreamFailQueryCount.Get(upstream).Store(0)
+		s.upstreamAvgTime.Get(upstream).Reset()
 	}
 }
 
@@ -166,11 +199,26 @@ func (s *Statistic) Exec(_ context.Context, _ map[string]any, dnsCtx *adapter.DN
 		if ok && upstreamTag != "" {
 			if tc, ok := value.(time.Duration); ok {
 				upstream := s.upstreamMap[upstreamTag]
-				s.upstreamTotalQueryCount.Get(upstream).Add(1)
+				tqc := s.upstreamTotalQueryCount.Get(upstream)
+				if tqc == nil {
+					tqc = new(atomic.Uint64)
+					s.upstreamTotalQueryCount.Set(upstream, tqc)
+				}
+				tqc.Add(1)
 				if tc == -1 {
-					s.upstreamFailQueryCount.Get(upstream).Add(1)
+					fqc := s.upstreamFailQueryCount.Get(upstream)
+					if fqc == nil {
+						fqc = new(atomic.Uint64)
+						s.upstreamFailQueryCount.Set(upstream, fqc)
+					}
+					fqc.Add(1)
 				} else {
-					s.upstreamAvgTime.Get(upstream).Avg(tc.Milliseconds())
+					at := s.upstreamAvgTime.Get(upstream)
+					if at == nil {
+						at = avg.NewAvg[int64]()
+						s.upstreamAvgTime.Set(upstream, at)
+					}
+					at.Avg(tc.Milliseconds())
 				}
 			}
 		}
