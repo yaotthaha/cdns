@@ -20,6 +20,10 @@ func (i *IPSetOther) Name() string {
 	return ""
 }
 
+func (i *IPSetOther) Close() error {
+	return nil
+}
+
 func (i *IPSetOther) AddIP(_ netip.Addr, _ time.Duration) error {
 	return ErrOSNotSupported
 }

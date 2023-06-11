@@ -12,7 +12,7 @@ const (
 	Inet6 InetType = "6"
 )
 
-type IPSet interface {
+type NftSet interface {
 	Name() string
 	Close() error
 	AddIP(netip.Addr, time.Duration) error

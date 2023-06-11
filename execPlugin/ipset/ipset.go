@@ -91,6 +91,18 @@ func (i *IPSet) Start() error {
 }
 
 func (i *IPSet) Close() error {
+	if i.ipset4 != nil {
+		err := i.ipset4.Close()
+		if err != nil {
+			return fmt.Errorf("close ipset4 conn fail: %s", err)
+		}
+	}
+	if i.ipset6 != nil {
+		err := i.ipset6.Close()
+		if err != nil {
+			return fmt.Errorf("close ipset6 conn fail: %s", err)
+		}
+	}
 	return nil
 }
 

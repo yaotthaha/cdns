@@ -43,6 +43,11 @@ func (i *IPSetLinux) Name() string {
 	return i.name
 }
 
+func (i *IPSetLinux) Close() error {
+	i.handler.Close()
+	return nil
+}
+
 func (i *IPSetLinux) AddIP(addr netip.Addr, ttl time.Duration) error {
 	if addr.Is4() && i.typ == Inet6 {
 		return ErrInetMismatch
