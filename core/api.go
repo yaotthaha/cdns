@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"runtime/debug"
 	"strings"
+	"sync"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/log"
@@ -17,14 +18,18 @@ import (
 )
 
 type APIServer struct {
-	ctx        context.Context
-	fatalClose func(error)
-	logger     log.Logger
-	debug      bool
-	secret     string
-	listen     netip.AddrPort
-	router     *chi.Mux
-	httpServer *http.Server
+	ctx            context.Context
+	fatalClose     func(error)
+	logger         log.Logger
+	debug          bool
+	secret         string
+	listen         netip.AddrPort
+	chiMux         *chi.Mux
+	httpServer     *http.Server
+	matchPluginAPI map[string]http.Handler
+	matchLock      sync.Mutex
+	execPluginAPI  map[string]http.Handler
+	execLock       sync.Mutex
 }
 
 func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOption) (*APIServer, error) {
@@ -41,13 +46,13 @@ func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOpti
 	}
 	a.secret = options.Secret
 	a.debug = options.Debug
-	a.router = chi.NewMux()
-	a.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	a.chiMux = chi.NewMux()
+	a.chiMux.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	a.httpServer = &http.Server{
 		Addr:    listenAddr.String(),
-		Handler: a.router,
+		Handler: a.chiMux,
 	}
 	return a, nil
 }
@@ -58,24 +63,36 @@ func (a *APIServer) WithFatalCloser(f func(error)) {
 
 func (a *APIServer) Start() error {
 	if a.httpServer != nil {
-		task := 0
-		if a.debug {
-			initGoDebugHTTPHandler(a.router)
-			task++
-		}
-		if task > 0 {
-			go func() {
-				err := a.httpServer.ListenAndServe()
-				if err != nil && err != http.ErrServerClosed {
-					a.fatalClose(fmt.Errorf("failed to start API server: %s", err))
-					a.logger.Error(fmt.Sprintf("failed to start API server: %s", err))
+		a.chiMux.Route("/", func(r chi.Router) {
+			if a.debug {
+				initGoDebugHTTPHandler(a.chiMux)
+			}
+			if a.secret != "" {
+				r.Use(a.auth)
+			}
+			a.matchLock.Lock()
+			if a.matchPluginAPI != nil {
+				for tag, handler := range a.matchPluginAPI {
+					r.Mount("/plugin/match/"+tag, handler)
 				}
-			}()
-			a.logger.Info(fmt.Sprintf("API server started at %s", a.httpServer.Addr))
-		} else {
-			a.router = nil
-			a.httpServer = nil
-		}
+			}
+			a.matchLock.Unlock()
+			a.execLock.Lock()
+			if a.execPluginAPI != nil {
+				for tag, handler := range a.execPluginAPI {
+					r.Mount("/plugin/exec/"+tag, handler)
+				}
+			}
+			a.execLock.Unlock()
+		})
+		go func() {
+			err := a.httpServer.ListenAndServe()
+			if err != nil && err != http.ErrServerClosed {
+				a.fatalClose(fmt.Errorf("failed to start API server: %s", err))
+				a.logger.Error(fmt.Sprintf("failed to start API server: %s", err))
+			}
+		}()
+		a.logger.Info(fmt.Sprintf("API server started at %s", a.httpServer.Addr))
 	}
 	return nil
 }
@@ -92,22 +109,32 @@ func (a *APIServer) Close() error {
 }
 
 func (a *APIServer) MountMatchPlugin(plugin adapter.MatchPlugin) {
-	if plugin == nil || a.router == nil {
+	if plugin == nil || a.chiMux == nil {
 		return
 	}
 	apiHandler := plugin.APIHandler()
 	if apiHandler != nil {
-		a.router.Mount(fmt.Sprintf("/plugin/match/%s", plugin.Tag()), apiHandler)
+		a.matchLock.Lock()
+		defer a.matchLock.Unlock()
+		if a.matchPluginAPI == nil {
+			a.matchPluginAPI = make(map[string]http.Handler)
+		}
+		a.matchPluginAPI[plugin.Tag()] = apiHandler
 	}
 }
 
 func (a *APIServer) MountExecPlugin(plugin adapter.ExecPlugin) {
-	if plugin == nil || a.router == nil {
+	if plugin == nil || a.chiMux == nil {
 		return
 	}
 	apiHandler := plugin.APIHandler()
 	if apiHandler != nil {
-		a.router.Mount(fmt.Sprintf("/plugin/exec/%s", plugin.Tag()), apiHandler)
+		a.execLock.Lock()
+		defer a.execLock.Unlock()
+		if a.execPluginAPI == nil {
+			a.execPluginAPI = make(map[string]http.Handler)
+		}
+		a.execPluginAPI[plugin.Tag()] = apiHandler
 	}
 }
 
