@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"runtime"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
@@ -30,12 +31,6 @@ func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, opti
 }
 
 func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.Context, *dns.Msg) {
-	defer func() {
-		err := recover()
-		if err != nil {
-			h.ContextLogger().Fatal(fmt.Sprintf("panic: %s", err))
-		}
-	}()
 	logger := h.ContextLogger()
 	tag := h.Tag()
 	ctx := h.Context()
@@ -47,6 +42,15 @@ func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.
 	ctx = log.AddContextTag(ctx)
 	logger.InfoContext(ctx, fmt.Sprintf("receive request from %s, qtype: %s, qname: %s", dnsCtx.ClientIP.String(), dns.TypeToString[reqMsg.Question[0].Qtype], reqMsg.Question[0].Name))
 	workflow.Exec(ctx, dnsCtx)
+	defer func() {
+		err := recover()
+		if err != nil {
+			h.ContextLogger().PrintContext(ctx, "Panic", fmt.Sprintf("panic: %s", err))
+			var stackBuf []byte
+			n := runtime.Stack(stackBuf, false)
+			h.ContextLogger().PrintContext(ctx, "Panic", fmt.Sprintf("stack: %s", stackBuf[:n]))
+		}
+	}()
 	if dnsCtx.RespMsg == nil {
 		dnsCtx.RespMsg = &dns.Msg{}
 		dnsCtx.RespMsg.SetRcode(reqMsg, dns.RcodeServerFailure)
