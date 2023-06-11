@@ -5,6 +5,7 @@ log:
   disabled: false # 禁用日志输出
   file: /tmp/cdns.log # 日志文件路径
   debug: false # 是否开启 Debug 日志输出
+  disable_timestamp: false # 是否禁用时间输出
 
 # api 模块：API 配置
 api:
@@ -23,6 +24,7 @@ upstream:
     udp: # UDP 上游服务器配置
       address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port
       idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
     dialer: # 拨号器配置
       timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
       so_mark: 0 # SO_MARK，仅支持 Linux
@@ -34,6 +36,7 @@ upstream:
     tcp: # UDP 上游服务器配置
       address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port
       idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
     dialer: # 拨号器配置
       timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
       so_mark: 0 # SO_MARK，仅支持 Linux
@@ -51,6 +54,7 @@ upstream:
       server_name: dns.google # TLS SNI
       insecure_skip_verify: false # 是否跳过证书校验
       idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
       # 以下为不常用设置，可以忽略
       ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
       client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
@@ -77,6 +81,7 @@ upstream:
       server_name: dns.cloudflare-dns.com # TLS SNI
       insecure_skip_verify: false # 是否跳过证书校验
       idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
       # 以下为不常用设置，可以忽略
       ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
       client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
@@ -98,6 +103,7 @@ upstream:
       server_name: dns.adguard-dns.com # TLS SNI
       insecure_skip_verify: false # 是否跳过证书校验
       idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
       # 以下为不常用设置，可以忽略
       ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
       client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
@@ -228,9 +234,9 @@ exec_plugins:
   - tag: workflow-go
     type: workflow-go
 
-  # host 插件，提供 hosts 功能，可以将指定域名解析到指定 IP
-  - tag: host
-    type: host
+  # hosts 插件，提供 hosts 功能，可以将指定域名解析到指定 IP
+  - tag: hosts
+    type: hosts
     args:
       rule: # 语法：匹配规则 IP1 IP2 IP3 ...，数据类型：数组，每一项一种匹配规则，只支持 full/suffix
         - 'full:example.com 1.1.1.1 2001::1'
@@ -239,6 +245,39 @@ exec_plugins:
         - /etc/cdns/hosts-01.txt
         - /etc/cdns/hosts-02.txt
 
+  # 为请求附加 ECS
+  - tag: ecs
+    type: ecs
+    args:
+      ip4: 100.64.0.1 # IPv4 地址
+      ip6: 2001::1 # IPv6 地址
+      mask4: 32 # 默认 32，隐私考虑可使用更大的子网地址
+      mask6: 128 # 默认 128，隐私考虑可使用更大的子网地址
+
+  # ipset 模块
+  - tag: ipset
+    type: ipset
+    args:
+      name4: set4 # IPSet 集合名称
+      mask4: 32 # 默认 32，使用更大的子网
+      ttl4: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
+      name6: set6 # IPSet 集合名称
+      mask6: 128 # 默认 128，使用更大的子网
+      ttl6: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
+
+  # nftset 模块
+  - tag: nftset
+    type: nftset
+    args:
+      table_name4: table4 # NftSet table 名称
+      set_name4: set4 # NftSet set 名称
+      mask4: 32 # 默认 32，使用更大的子网
+      ttl4: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
+      table_name6: table4 # NftSet table 名称
+      set_name6: set4 # NftSet set 名称
+      mask6: 128 # 默认 128，使用更大的子网
+      ttl6: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
+
 # workflow 模块：工作流
 workflows:
   - tag: main
@@ -246,7 +285,7 @@ workflows:
       # 用户可以自定义工作流程，对 DNS 请求进行精细化处理
       # 工作量支持三种匹配类型 match_or/match_and/exec
 
-      - match_and: # 匹配规则，所有规则匹配成功才会执行 exec 规则，数据类型：数组，每一项一种匹配规则
+      - match_and: # 匹配规则，所有规则匹配成功才会执行 exec 规则，若存在 else_exec，则匹配不成功时执行 else_exec，数据类型：数组，每一项一种匹配规则
           - listener: # 匹配监听器 tag
               - listener-1
               - listener-2
@@ -264,7 +303,7 @@ workflows:
           - resp_ip: # 如果有响应消息，匹配响应消息中的IP，仅支持 A/AAAA
               - 100.64.0.1
               - 192.168.0.0/24
-            invert: true # 是否对规则取反，注意放置的位置，只能防止在每一项匹配规则里
+            invert: true # 是否对规则取反，注意放置的位置，只能放置在每一项匹配规则里
           - mark: 0 # 匹配标记，格式：正整数
           - plugin: # 使用 match-plugin 匹配
               tag: domain # 匹配插件 tag
@@ -272,6 +311,8 @@ workflows:
                 Foo: Bar
           - match_and: # 嵌套匹配规则，所有规则匹配成功才会执行 exec 规则，数据类型：数组，每一项一种匹配规则
           - match_or: # 嵌套匹配规则，只要有一项规则匹配成功就会执行 exec 规则，数据类型：数组，每一项一种匹配规则
+        else_exec: # 若存在 else_exec，则匹配不成功时执行 else_exec
+          # do something...
         exec:
           - mark: 1 # 设置标记，格式：正整数
           - upstream: DNS # 转发请求到 upstream，数据类型：字符串，值为 upstream tag
@@ -309,6 +350,8 @@ workflows:
               args:
                 code: # 设置匹配的 code，数据结构：数组|字符串
                   - cn
+        else_exec: # 若存在 else_exec，则匹配不成功时执行 else_exec
+          # do something...
         exec:
 
       # exec-plugin 详解
@@ -342,6 +385,16 @@ workflows:
               args: # 传递的参数
                 prefer: 'A' # 若请求 AAAA 记录，插件会使用最后一个触发的 upstream 查询 A 记录，若存在，则丢弃 AAAA 结果，生成空结果
                 # prefer: 'AAAA' # 若请求 A 记录，插件会使用最后一个触发的 upstream 查询 AAAA 记录，若存在，则丢弃 A 结果，生成空结果
+
+          - plugin: # 使用 exec-plugin ecs，注意，需要在转发到 upstream 前使用
+              tag: ecs
+          - upstream: DNS
+
+          - upstream: DNS
+          - plugin: # 使用 exec-plugin ipset，注意，需要在转发到 upstream 后使用
+              tag: ipset
+          - plugin: # 使用 exec-plugin nftset，注意，需要在转发到 upstream 后使用
+              tag: nftset
 
 # listener 模块：监听器
 listeners:
