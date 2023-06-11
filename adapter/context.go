@@ -33,12 +33,44 @@ func (d *DNSContext) WithWorkflow(w Workflow) *DNSContext {
 	return d
 }
 
+func (d *DNSContext) SetKV(key string, value any) {
+	if d.MetaData == nil {
+		d.MetaData = make(map[string]any)
+	}
+	d.MetaData[key] = value
+}
+
+func (d *DNSContext) GetKV(key string) any {
+	if d.MetaData == nil {
+		return nil
+	}
+	return d.MetaData[key]
+}
+
+func (d *DNSContext) DelKV(key string) {
+	if d.MetaData == nil {
+		return
+	}
+	delete(d.MetaData, key)
+}
+
+func (d *DNSContext) RangeKV(f func(key string, value any) bool) bool {
+	if d.MetaData == nil {
+		return false
+	}
+	for k, v := range d.MetaData {
+		if !f(k, v) {
+			return false
+		}
+	}
+	return true
+}
+
 func (d *DNSContext) Clone() *DNSContext {
 	newD := &DNSContext{
 		Listener: d.Listener,
 		ClientIP: d.ClientIP,
 		Mark:     d.Mark,
-		MetaData: d.MetaData, // Unsafe
 	}
 	if d.UsedWorkflow != nil {
 		newD.UsedWorkflow = make([]Workflow, len(d.UsedWorkflow))
@@ -53,6 +85,12 @@ func (d *DNSContext) Clone() *DNSContext {
 	}
 	if d.RespMsg != nil {
 		newD.RespMsg = d.RespMsg.Copy()
+	}
+	if d.MetaData != nil {
+		newD.MetaData = make(map[string]any)
+		for k, v := range d.MetaData {
+			newD.MetaData[k] = v
+		}
 	}
 	return newD
 }

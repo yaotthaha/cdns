@@ -109,11 +109,11 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 	if DNSTypeA && prefer == "AAAA" {
 		reqAAAADNSMsg := &dns.Msg{}
 		reqAAAADNSMsg.SetQuestion(dns.Fqdn(dnsCtx.ReqMsg.Question[0].Name), dns.TypeAAAA)
-		upstream := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)]
-		if upstream == nil {
+		up := dnsCtx.UsedUpstream[len(dnsCtx.UsedUpstream)-1]
+		if up == nil {
 			return true
 		}
-		respAAAADNSMsg, err := upstream.Exchange(ctx, reqAAAADNSMsg)
+		respAAAADNSMsg, err := upstream.RetryUpstream(ctx, up, reqAAAADNSMsg, nil)
 		if err != nil {
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer AAAA fail: dns query fail"))
 			return true
@@ -149,7 +149,7 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		if up == nil {
 			return true
 		}
-		respADNSMsg, err := upstream.RetryUpstream(ctx, up, reqADNSMsg)
+		respADNSMsg, err := upstream.RetryUpstream(ctx, up, reqADNSMsg, nil)
 		if err != nil {
 			p.logger.ErrorContext(ctx, fmt.Sprintf("prefer A fail: dns query fail"))
 			return true

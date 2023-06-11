@@ -104,7 +104,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		logger.DebugContext(ctx, fmt.Sprintf("sends to upstream: %s", *e.upstream))
 		u := e.core.GetUpstream(*e.upstream)
 		dnsCtx.WithUpstream(u)
-		respMsg, err := upstream.RetryUpstream(ctx, u, dnsCtx.ReqMsg)
+		respMsg, err := upstream.RetryUpstream(ctx, u, dnsCtx.ReqMsg, dnsCtx)
 		if err == nil {
 			dnsCtx.RespMsg = respMsg
 		}

@@ -24,6 +24,7 @@ type MatchPlugin interface {
 
 type ExecPluginCore interface {
 	GetWorkflow(string) Workflow
+	ListUpstream() []Upstream
 }
 
 type ExecPlugin interface {

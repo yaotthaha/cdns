@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/go-chi/chi v1.5.4
 	github.com/google/nftables v0.1.0
+	github.com/gorilla/websocket v1.5.0
 	github.com/miekg/dns v1.1.54
 	github.com/oschwald/maxminddb-golang v1.10.0
 	github.com/quic-go/quic-go v0.35.1

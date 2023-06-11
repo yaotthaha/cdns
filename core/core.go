@@ -251,6 +251,14 @@ func (c *Core) GetUpstream(tag string) adapter.Upstream {
 	return c.upstreams[tag]
 }
 
+func (c *Core) ListUpstream() []adapter.Upstream {
+	var upstreams []adapter.Upstream
+	for _, u := range c.upstreams {
+		upstreams = append(upstreams, u)
+	}
+	return upstreams
+}
+
 func (c *Core) GetWorkflow(tag string) adapter.Workflow {
 	return c.workflows[tag]
 }

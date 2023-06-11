@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
@@ -33,13 +34,20 @@ func NewUpstream(ctx context.Context, core adapter.Core, logger log.Logger, opti
 	}
 }
 
-func RetryUpstream(ctx context.Context, upstream adapter.Upstream, dnsMsg *dns.Msg) (*dns.Msg, error) {
+func RetryUpstream(ctx context.Context, upstream adapter.Upstream, dnsMsg *dns.Msg, dnsCtx *adapter.DNSContext) (*dns.Msg, error) {
 	for i := 0; i < 3; i++ {
+		startTime := time.Now()
 		resp, err := upstream.Exchange(ctx, dnsMsg)
 		if err == nil {
+			if dnsCtx != nil {
+				dnsCtx.SetKV("upstream-time-consuming-"+upstream.Tag(), time.Since(startTime))
+			}
 			return resp, nil
 		}
 		upstream.ContextLogger().WarnContext(ctx, fmt.Sprintf("retry %d: %s", i+1, logDNSMsg(dnsMsg)))
+	}
+	if dnsCtx != nil {
+		dnsCtx.SetKV("upstream-time-consuming-"+upstream.Tag(), time.Duration(-1))
 	}
 	err := fmt.Errorf("retry upstream failed: %s", logDNSMsg(dnsMsg))
 	upstream.ContextLogger().ErrorContext(ctx, err.Error())
