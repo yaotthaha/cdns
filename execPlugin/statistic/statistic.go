@@ -96,12 +96,18 @@ func (s *Statistic) APIHandler() http.Handler {
 		w.Write(info)
 	})
 	c.Mount("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wsConn, err := upgrader.Upgrade(w, r, nil)
+		respHeader := http.Header{}
+		respHeader.Set("Content-Type", "application/json")
+		wsConn, err := upgrader.Upgrade(w, r, respHeader)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		defer wsConn.Close()
+		isClosed := atomic.Bool{}
+		defer func() {
+			isClosed.Store(true)
+			wsConn.Close()
+		}()
 		sleepTime := 1 * time.Second
 		if sleepSecond := r.URL.Query().Get("seconds"); sleepSecond != "" {
 			sleepSecondUint, err := strconv.ParseUint(sleepSecond, 10, 64)
@@ -109,15 +115,39 @@ func (s *Statistic) APIHandler() http.Handler {
 				sleepTime = time.Duration(sleepSecondUint) * time.Second
 			}
 		}
+		go func() {
+			for {
+				select {
+				case <-s.ctx.Done():
+					return
+				default:
+				}
+				if isClosed.Load() {
+					return
+				}
+				msType, _, err := wsConn.ReadMessage()
+				if err != nil {
+					continue
+				}
+				if msType == websocket.CloseMessage {
+					isClosed.Store(true)
+					wsConn.Close()
+					return
+				}
+			}
+		}()
 		ticker := time.NewTicker(sleepTime)
 		defer ticker.Stop()
 		for {
+			if isClosed.Load() {
+				return
+			}
 			select {
 			case <-ticker.C:
 				wsConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				err := wsConn.WriteJSON(s.getInfo())
 				if err != nil {
-					return
+					continue
 				}
 			case <-s.ctx.Done():
 				return
