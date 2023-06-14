@@ -11,8 +11,9 @@ const (
 )
 
 const (
-	UpstreamRandom = "random"
-	UpstreamMulti  = "multi"
+	UpstreamRandom    = "random"
+	UpstreamMulti     = "multi"
+	UpstreamQueryTest = "querytest"
 )
 
 const (

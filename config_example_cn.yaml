@@ -132,6 +132,18 @@ upstream:
         - tag: Cloudflare-HTTPS-DNS
         - tag: AdGuard-QUIC-DNS
 
+  # 根据请求测试选取上游服务器查询
+  - tag: QueryTest-DNS
+    type: querytest
+    querytest:
+      upstreams:
+        - tag: Google-TLS-DNS
+        - tag: Cloudflare-HTTPS-DNS
+        - tag: AdGuard-QUIC-DNS
+      test_interval: 10s # 测试间隔时间，格式：Golang time.Duration 格式
+      test_domain: www.example.com # 测试域名
+      fallback: false # 是否开启回退模式，开启后，当所有上游服务器都不可用时，会使用第一个上游服务器进行查询
+
 # match-plugin 模块：匹配插件
 # 用户可以自定义编写自己的匹配插件，只需实现 adapter.MatchPlugin 接口，并注册，然后在 matchPlugin/plugin.go 中匿名引入即可
 match_plugins:

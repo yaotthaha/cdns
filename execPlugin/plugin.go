@@ -9,7 +9,7 @@ import (
 	_ "github.com/yaotthaha/cdns/execPlugin/nftset"
 	_ "github.com/yaotthaha/cdns/execPlugin/prefer"
 	_ "github.com/yaotthaha/cdns/execPlugin/redis-cache"
-	// _ "github.com/yaotthaha/cdns/execPlugin/statistic"
+	_ "github.com/yaotthaha/cdns/execPlugin/statistic"
 	_ "github.com/yaotthaha/cdns/execPlugin/workflow-go"
 )
 

@@ -5,16 +5,17 @@ import (
 )
 
 type UpstreamOption struct {
-	Tag          string               `yaml:"tag"`
-	Type         string               `yaml:"type"`
-	DialerOption UpstreamDialerOption `yaml:"dialer,omitempty"`
-	UDPOption    UpstreamUDPOption    `yaml:"udp,omitempty"`
-	TCPOption    UpstreamTCPOption    `yaml:"tcp,omitempty"`
-	TLSOption    UpstreamTLSOption    `yaml:"tls,omitempty"`
-	HTTPSOption  UpstreamHTTPSOption  `yaml:"https,omitempty"`
-	QUICOption   UpstreamQUICOption   `yaml:"quic,omitempty"`
-	RandomOption UpstreamRandomOption `yaml:"random,omitempty"`
-	MultiOption  UpstreamMultiOption  `yaml:"multi,omitempty"`
+	Tag             string                  `yaml:"tag"`
+	Type            string                  `yaml:"type"`
+	DialerOption    UpstreamDialerOption    `yaml:"dialer,omitempty"`
+	UDPOption       UpstreamUDPOption       `yaml:"udp,omitempty"`
+	TCPOption       UpstreamTCPOption       `yaml:"tcp,omitempty"`
+	TLSOption       UpstreamTLSOption       `yaml:"tls,omitempty"`
+	HTTPSOption     UpstreamHTTPSOption     `yaml:"https,omitempty"`
+	QUICOption      UpstreamQUICOption      `yaml:"quic,omitempty"`
+	RandomOption    UpstreamRandomOption    `yaml:"random,omitempty"`
+	MultiOption     UpstreamMultiOption     `yaml:"multi,omitempty"`
+	QueryTestOption UpstreamQueryTestOption `yaml:"querytest,omitempty"`
 }
 
 type UpstreamDialerOption struct {
