@@ -23,7 +23,6 @@ const (
 
 const (
 	TCPDialTimeout = 20 * time.Second
-	UDPDialTimeout = 20 * time.Second
 	TCPIdleTimeout = 2 * time.Minute
 	UDPIdleTimeout = 5 * time.Minute
 )

@@ -41,13 +41,9 @@ func newSimpleDialer(options upstream.UpstreamDialerOption) (*simpleDialer, erro
 	if options.Timeout > 0 {
 		tcp4Dialer.Timeout = time.Duration(options.Timeout)
 		tcp6Dialer.Timeout = time.Duration(options.Timeout)
-		udp4Dialer.Timeout = time.Duration(options.Timeout)
-		udp6Dialer.Timeout = time.Duration(options.Timeout)
 	} else {
 		tcp4Dialer.Timeout = constant.TCPDialTimeout
 		tcp6Dialer.Timeout = constant.TCPDialTimeout
-		udp4Dialer.Timeout = constant.UDPDialTimeout
-		udp6Dialer.Timeout = constant.UDPDialTimeout
 	}
 	if options.SoMark > 0 {
 		tcp4Dialer.Control = control.SetMark(options.SoMark)
