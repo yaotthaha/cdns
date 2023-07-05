@@ -87,6 +87,9 @@ func NewQUICUpstream(ctx context.Context, rootLogger log.Logger, options upstrea
 		u.ip = ip
 	}
 	u.port = port
+	if quicOptions.Dialer.Socks5 != nil {
+		return nil, fmt.Errorf("create quic upstream fail: socks5 is not supported")
+	}
 	d, err := dialer.NewNetDialer(quicOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create quic upstream fail: create dialer fail: %s", err)
