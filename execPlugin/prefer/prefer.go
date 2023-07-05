@@ -3,7 +3,6 @@ package prefer
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/tools"
@@ -15,7 +14,11 @@ import (
 
 const PluginType = "prefer"
 
-var _ adapter.ExecPlugin = (*Prefer)(nil)
+var (
+	_ adapter.ExecPlugin        = (*Prefer)(nil)
+	_ adapter.WithContext       = (*Prefer)(nil)
+	_ adapter.WithContextLogger = (*Prefer)(nil)
+)
 
 func init() {
 	adapter.RegisterExecPlugin(PluginType, NewPrefer)
@@ -43,27 +46,12 @@ func (p *Prefer) Type() string {
 	return PluginType
 }
 
-func (p *Prefer) Start() error {
-	return nil
-}
-
-func (p *Prefer) Close() error {
-	return nil
-}
-
 func (p *Prefer) WithContext(ctx context.Context) {
 	p.ctx = ctx
 }
 
-func (p *Prefer) WithLogger(contextLogger log.ContextLogger) {
+func (p *Prefer) WithContextLogger(contextLogger log.ContextLogger) {
 	p.logger = contextLogger
-}
-
-func (p *Prefer) WithCore(_ adapter.ExecPluginCore) {
-}
-
-func (p *Prefer) APIHandler() http.Handler {
-	return nil
 }
 
 func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

@@ -9,11 +9,11 @@ import (
 )
 
 type Option struct {
-	LogOption          LogOption                       `yaml:"log"`
-	APIOption          APIOption                       `yaml:"api"`
-	UpstreamOptions    []upstream.UpstreamOption       `yaml:"upstreams"`
-	MatchPluginOptions []matchPlugin.MatchPluginOption `yaml:"match_plugins"`
-	ExecPluginOptions  []execPlugin.ExecPluginOption   `yaml:"exec_plugins"`
-	WorkflowOptions    []workflow.WorkflowOption       `yaml:"workflows"`
-	ListenerOptions    []listener.ListenerOptions      `yaml:"listeners"`
+	LogOptions         LogOptions                       `yaml:"log"`
+	APIOptions         APIOptions                       `yaml:"api"`
+	UpstreamOptions    []upstream.UpstreamOptions       `yaml:"upstreams"`
+	MatchPluginOptions []matchPlugin.MatchPluginOptions `yaml:"match-plugins"`
+	ExecPluginOptions  []execPlugin.ExecPluginOptions   `yaml:"exec-plugins"`
+	WorkflowOptions    []workflow.WorkflowOptions       `yaml:"workflows"`
+	ListenerOptions    []listener.ListenerOptions       `yaml:"listeners"`
 }

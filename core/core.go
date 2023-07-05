@@ -39,7 +39,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		logger: log.NewTagLogger(logger, "core"),
 	}
 	// Init API Server
-	apiServer, err := NewAPIServer(ctx, logger, options.APIOption)
+	apiServer, err := NewAPIServer(ctx, logger, options.APIOptions)
 	if err != nil {
 		return nil, fmt.Errorf("init api server fail: %s", err)
 	}
@@ -56,9 +56,12 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		if _, ok := core.upstreams[u.Tag]; ok {
 			return nil, fmt.Errorf("init upstream fail: tag %s duplicated", u.Tag)
 		}
-		up, err := upstream.NewUpstream(ctx, core, logger, u)
+		up, err := upstream.NewUpstream(ctx, logger, u)
 		if err != nil {
 			return nil, fmt.Errorf("init upstream fail: %s", err)
+		}
+		if wc, ok := up.(adapter.WithCore); ok {
+			wc.WithCore(core)
 		}
 		core.upstreams[u.Tag] = up
 	}
@@ -76,9 +79,18 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			if err != nil {
 				return nil, fmt.Errorf("init match plugin %s fail: %s", m.Tag, err)
 			}
-			mp.WithContext(ctx)
-			mp.WithLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s", mp.Tag()))))
-			core.apiServer.MountMatchPlugin(mp)
+			if wc, ok := mp.(adapter.WithContext); ok {
+				wc.WithContext(ctx)
+			}
+			if wl, ok := mp.(adapter.WithContextLogger); ok {
+				wl.WithContextLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s", mp.Tag()))))
+			}
+			if wc, ok := mp.(adapter.WithMatchPluginCore); ok {
+				wc.WithCore(core)
+			}
+			if mp, ok := mp.(MountMatchPlugin); ok {
+				core.apiServer.MountMatchPlugin(mp)
+			}
 			core.matchPlugins[m.Tag] = mp
 		}
 	}
@@ -96,10 +108,18 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			if err != nil {
 				return nil, fmt.Errorf("init exec plugin %s init fail: %s", e.Tag, err)
 			}
-			ep.WithContext(ctx)
-			ep.WithLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s", ep.Tag()))))
-			ep.WithCore(core)
-			core.apiServer.MountExecPlugin(ep)
+			if wc, ok := ep.(adapter.WithContext); ok {
+				wc.WithContext(ctx)
+			}
+			if wl, ok := ep.(adapter.WithContextLogger); ok {
+				wl.WithContextLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s", ep.Tag()))))
+			}
+			if wc, ok := ep.(adapter.WithExecPluginCore); ok {
+				wc.WithCore(core)
+			}
+			if mp, ok := ep.(MountExecPlugin); ok {
+				core.apiServer.MountExecPlugin(mp)
+			}
 			core.execPlugins[e.Tag] = ep
 		}
 	}
@@ -152,55 +172,67 @@ func (c *Core) Run() error {
 			if fatalStarter, ok := u.(adapter.FatalStarter); ok {
 				fatalStarter.WithFatalCloser(startFatalCancel)
 			}
-			err := u.Start()
-			if err != nil {
-				return fmt.Errorf("upstream [%s] start fail: %s", u.Tag(), err)
+			if starter, isStarter := u.(adapter.Starter); isStarter {
+				err := starter.Start()
+				if err != nil {
+					return fmt.Errorf("upstream [%s] start fail: %s", u.Tag(), err)
+				}
+				c.logger.Info(fmt.Sprintf("upstream [%s] start", u.Tag()))
 			}
-			c.logger.Info(fmt.Sprintf("upstream [%s] start", u.Tag()))
 		}
 		defer func() {
 			for _, u := range c.upstreams {
-				err := u.Close()
-				if err != nil {
-					c.logger.Error(fmt.Sprintf("upstream [%s] close fail: %s", u.Tag(), err))
+				if closer, isCloser := u.(adapter.Closer); isCloser {
+					err := closer.Close()
+					if err != nil {
+						c.logger.Error(fmt.Sprintf("upstream [%s] close fail: %s", u.Tag(), err))
+					}
+					c.logger.Info(fmt.Sprintf("upstream [%s] close", u.Tag()))
 				}
-				c.logger.Info(fmt.Sprintf("upstream [%s] close", u.Tag()))
 			}
 		}()
 	}
 	if c.matchPlugins != nil {
 		for _, m := range c.matchPlugins {
-			err := m.Start()
-			if err != nil {
-				return fmt.Errorf("match plugin [%s] start fail: %s", m.Tag(), err)
+			if starter, isStarter := m.(adapter.Starter); isStarter {
+				err := starter.Start()
+				if err != nil {
+					return fmt.Errorf("match plugin [%s] start fail: %s", m.Tag(), err)
+				}
+				c.logger.Info(fmt.Sprintf("match plugin [%s] start", m.Tag()))
 			}
-			c.logger.Info(fmt.Sprintf("match plugin [%s] start", m.Tag()))
 		}
 		defer func() {
 			for _, m := range c.matchPlugins {
-				err := m.Close()
-				if err != nil {
-					c.logger.Error(fmt.Sprintf("match plugin [%s] close fail: %s", m.Tag(), err))
+				if closer, isCloser := m.(adapter.Closer); isCloser {
+					err := closer.Close()
+					if err != nil {
+						c.logger.Error(fmt.Sprintf("match plugin [%s] close fail: %s", m.Tag(), err))
+					}
+					c.logger.Info(fmt.Sprintf("match plugin [%s] close", m.Tag()))
 				}
-				c.logger.Info(fmt.Sprintf("match plugin [%s] close", m.Tag()))
 			}
 		}()
 	}
 	if c.execPlugins != nil {
 		for _, e := range c.execPlugins {
-			err := e.Start()
-			if err != nil {
-				return fmt.Errorf("exec plugin [%s] start fail: %s", e.Tag(), err)
+			if starter, isStarter := e.(adapter.Starter); isStarter {
+				err := starter.Start()
+				if err != nil {
+					return fmt.Errorf("exec plugin [%s] start fail: %s", e.Tag(), err)
+				}
+				c.logger.Info(fmt.Sprintf("exec plugin [%s] start", e.Tag()))
 			}
-			c.logger.Info(fmt.Sprintf("exec plugin [%s] start", e.Tag()))
 		}
 		defer func() {
 			for _, e := range c.execPlugins {
-				err := e.Close()
-				if err != nil {
-					c.logger.Error(fmt.Sprintf("exec plugin [%s] close fail: %s", e.Tag(), err))
+				if closer, isCloser := e.(adapter.Closer); isCloser {
+					err := closer.Close()
+					if err != nil {
+						c.logger.Error(fmt.Sprintf("exec plugin [%s] close fail: %s", e.Tag(), err))
+					}
+					c.logger.Info(fmt.Sprintf("exec plugin [%s] close", e.Tag()))
 				}
-				c.logger.Info(fmt.Sprintf("exec plugin [%s] close", e.Tag()))
 			}
 		}()
 	}
@@ -209,19 +241,23 @@ func (c *Core) Run() error {
 			if fatalStarter, ok := l.(adapter.FatalStarter); ok {
 				fatalStarter.WithFatalCloser(startFatalCancel)
 			}
-			err := l.Start()
-			if err != nil {
-				return fmt.Errorf("listener [%s] start fail: %s", l.Tag(), err)
+			if starter, isStarter := l.(adapter.Starter); isStarter {
+				err := starter.Start()
+				if err != nil {
+					return fmt.Errorf("listener [%s] start fail: %s", l.Tag(), err)
+				}
+				c.logger.Info(fmt.Sprintf("listener [%s] start", l.Tag()))
 			}
-			c.logger.Info(fmt.Sprintf("listener [%s] start", l.Tag()))
 		}
 		defer func() {
 			for _, l := range c.listeners {
-				err := l.Close()
-				if err != nil {
-					c.logger.Error(fmt.Sprintf("listener [%s] close fail: %s", l.Tag(), err))
+				if closer, isCloser := l.(adapter.Closer); isCloser {
+					err := closer.Close()
+					if err != nil {
+						c.logger.Error(fmt.Sprintf("listener [%s] close fail: %s", l.Tag(), err))
+					}
+					c.logger.Info(fmt.Sprintf("listener [%s] close", l.Tag()))
 				}
-				c.logger.Info(fmt.Sprintf("listener [%s] close", l.Tag()))
 			}
 		}()
 	}

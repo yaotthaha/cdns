@@ -20,7 +20,13 @@ import (
 
 const PluginType = "sing-geoip"
 
-var _ adapter.MatchPlugin = (*SingGeoIP)(nil)
+var (
+	_ adapter.MatchPlugin       = (*SingGeoIP)(nil)
+	_ adapter.Starter           = (*SingGeoIP)(nil)
+	_ adapter.WithContext       = (*SingGeoIP)(nil)
+	_ adapter.WithContextLogger = (*SingGeoIP)(nil)
+	_ adapter.APIHandler        = (*SingGeoIP)(nil)
+)
 
 func init() {
 	adapter.RegisterMatchPlugin(PluginType, NewSingGeoIP)
@@ -80,15 +86,11 @@ func (s *SingGeoIP) Start() error {
 	return nil
 }
 
-func (s *SingGeoIP) Close() error {
-	return nil
-}
-
 func (s *SingGeoIP) WithContext(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *SingGeoIP) WithLogger(contextLogger log.ContextLogger) {
+func (s *SingGeoIP) WithContextLogger(contextLogger log.ContextLogger) {
 	s.logger = contextLogger
 }
 

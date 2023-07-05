@@ -5,67 +5,92 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/upstream"
+	"github.com/yaotthaha/cdns/upstream/bootstrap"
 	"github.com/yaotthaha/cdns/upstream/connpool"
+	"github.com/yaotthaha/cdns/upstream/dialer"
 
 	"github.com/miekg/dns"
 )
 
 type udpUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	dialer       NetDialer
-	address      netip.AddrPort
-	queryTimeout time.Duration
-	idleTimeout  time.Duration
-	connPool     *connpool.ConnPool
-	//
-	tcpIdleTimeout time.Duration
-	tcpConnPool    *connpool.ConnPool
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	dialer    dialer.NetDialer
+	domain    string
+	ip        netip.Addr
+	port      uint16
+	bootstrap *bootstrap.Bootstrap
+
+	queryTimeout   time.Duration
+	idleTimeout    time.Duration
+	connectTimeout time.Duration
+
+	udpConnPool *connpool.ConnPool
+	tcpConnPool *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*udpUpstream)(nil)
 
-func NewUDPUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewUDPUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &udpUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.UDPOption.QueryTimeout > 0 {
-		u.queryTimeout = time.Duration(options.UDPOption.QueryTimeout)
+	if options.Options == nil {
+		return nil, fmt.Errorf("create udp upstream fail: options is empty")
+	}
+	udpOptions := options.Options.(*upstream.UpstreamUDPOptions)
+	if udpOptions.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(udpOptions.QueryTimeout)
 	} else {
 		u.queryTimeout = constant.DNSQueryTimeout
 	}
-	if options.UDPOption.Address == "" {
-		return nil, fmt.Errorf("create udp upstream fail: address is empty")
-	}
-	ip, err := netip.ParseAddr(options.UDPOption.Address)
-	if err == nil {
-		options.UDPOption.Address = net.JoinHostPort(ip.String(), "53")
-	}
-	address, err := netip.ParseAddrPort(options.UDPOption.Address)
-	if err != nil || !address.IsValid() {
-		return nil, fmt.Errorf("create udp upstream fail: parse address fail: %s", err)
-	}
-	u.address = address
-	if options.UDPOption.IdleTimeout > 0 {
-		u.idleTimeout = time.Duration(options.UDPOption.IdleTimeout)
+	if udpOptions.IdleTimeout > 0 {
+		u.idleTimeout = time.Duration(udpOptions.IdleTimeout)
 	} else {
 		u.idleTimeout = constant.UDPIdleTimeout
 	}
-	u.tcpIdleTimeout = constant.TCPIdleTimeout
-	dialer, err := newNetDialer(options.DialerOption)
+	if udpOptions.ConnectTimeout > 0 {
+		u.connectTimeout = time.Duration(udpOptions.ConnectTimeout)
+	} else {
+		u.connectTimeout = constant.UDPConnectTimeout
+	}
+	domain, ip, port, err := parseAddress(udpOptions.Address, 53)
+	if err != nil {
+		return nil, fmt.Errorf("create udp upstream fail: parse address fail: %s", err)
+	}
+	if domain != "" {
+		if udpOptions.Bootstrap == nil {
+			return nil, fmt.Errorf("create udp upstream fail: bootstrap is needed when address is domain")
+		}
+		b, err := bootstrap.NewBootstrap(*udpOptions.Bootstrap)
+		if err != nil {
+			return nil, fmt.Errorf("create udp upstream fail: create bootstrap fail: %s", err)
+		}
+		u.domain = domain
+		u.bootstrap = b
+	} else {
+		u.ip = ip
+	}
+	u.port = port
+	if udpOptions.Dialer.Socks5 != nil {
+		return nil, fmt.Errorf("create udp upstream fail: socks5 is not supported")
+	}
+	d, err := dialer.NewNetDialer(udpOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create udp upstream fail: create dialer fail: %s", err)
 	}
-	u.dialer = dialer
+	u.dialer = d
 	return u, nil
 }
 
@@ -77,21 +102,59 @@ func (u *udpUpstream) Type() string {
 	return constant.UpstreamUDP
 }
 
+func (u *udpUpstream) WithCore(core adapter.Core) {
+	if u.bootstrap != nil {
+		u.bootstrap.WithCore(core)
+	}
+}
+
 func (u *udpUpstream) Start() error {
-	connPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
-		conn, err := u.dialer.DialContext(u.ctx, constant.NetworkUDP, u.address.String())
+	udpConnPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
+		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+		defer cancel()
+		var (
+			conn net.Conn
+			err  error
+		)
+		if u.domain == "" {
+			address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+			conn, err = u.dialer.DialContext(ctx, constant.NetworkUDP, address)
+		} else {
+			var addresses []string
+			addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+			if err != nil {
+				return nil, err
+			}
+			conn, err = u.dialer.DialParallel(ctx, constant.NetworkUDP, addresses)
+		}
 		if err != nil {
 			return nil, err
 		}
-		u.logger.Debug("open new connection")
+		u.logger.Debug("open new udp connection")
 		return conn, nil
 	})
-	connPool.SetPreCloseCall(func(conn net.Conn) {
-		u.logger.Debug("close connection")
+	udpConnPool.SetPreCloseCall(func(conn net.Conn) {
+		u.logger.Debug("close udp connection")
 	})
-	u.connPool = connPool
-	tcpConnPool := connpool.New(constant.MaxConn, u.tcpIdleTimeout, func() (net.Conn, error) {
-		conn, err := u.dialer.DialContext(u.ctx, constant.NetworkTCP, u.address.String())
+	u.udpConnPool = udpConnPool
+	tcpConnPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
+		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+		defer cancel()
+		var (
+			conn net.Conn
+			err  error
+		)
+		if u.domain == "" {
+			address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+			conn, err = u.dialer.DialContext(ctx, constant.NetworkTCP, address)
+		} else {
+			var addresses []string
+			addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+			if err != nil {
+				return nil, err
+			}
+			conn, err = u.dialer.DialParallel(ctx, constant.NetworkTCP, addresses)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -106,8 +169,8 @@ func (u *udpUpstream) Start() error {
 }
 
 func (u *udpUpstream) Close() error {
+	u.udpConnPool.Close()
 	u.tcpConnPool.Close()
-	u.connPool.Close()
 	return nil
 }
 
@@ -118,7 +181,7 @@ func (u *udpUpstream) ContextLogger() log.ContextLogger {
 func (u *udpUpstream) simpleExchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
 	u.logger.DebugContext(ctx, "get connection")
 	isClosed := false
-	conn, err := u.connPool.Get()
+	conn, err := u.udpConnPool.Get()
 	if err != nil {
 		err = fmt.Errorf("get connection fail: %s", err)
 		u.logger.ErrorContext(ctx, err.Error())
@@ -128,7 +191,7 @@ func (u *udpUpstream) simpleExchange(ctx context.Context, dnsMsg *dns.Msg) (*dns
 	dnsConn := &dns.Conn{Conn: newPacketConn(conn)}
 	defer func() {
 		if !isClosed {
-			err := u.connPool.Put(conn)
+			err := u.udpConnPool.Put(conn)
 			if err != nil {
 				u.logger.ErrorContext(ctx, fmt.Sprintf("put connection to pool fail: %s", err))
 			}
@@ -171,7 +234,7 @@ func (u *udpUpstream) tcpFallbackExchange(ctx context.Context, dnsMsg *dns.Msg) 
 	dnsConn := &dns.Conn{Conn: conn}
 	defer func() {
 		if !isClosed {
-			err := u.connPool.Put(conn)
+			err := u.tcpConnPool.Put(conn)
 			if err != nil {
 				u.logger.ErrorContext(ctx, fmt.Sprintf("tcp fallback: put tcp connection to pool fail: %s", err))
 			}

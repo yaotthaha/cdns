@@ -18,7 +18,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*NftSet)(nil)
+var (
+	_ adapter.ExecPlugin        = (*NftSet)(nil)
+	_ adapter.Starter           = (*NftSet)(nil)
+	_ adapter.Closer            = (*NftSet)(nil)
+	_ adapter.WithContextLogger = (*NftSet)(nil)
+	_ adapter.APIHandler        = (*NftSet)(nil)
+)
 
 const PluginType = "nftset"
 
@@ -115,14 +121,8 @@ func (n *NftSet) Close() error {
 	return nil
 }
 
-func (n *NftSet) WithContext(_ context.Context) {
-}
-
-func (n *NftSet) WithLogger(logger log.ContextLogger) {
-	n.logger = logger
-}
-
-func (n *NftSet) WithCore(_ adapter.ExecPluginCore) {
+func (n *NftSet) WithContextLogger(contextLogger log.ContextLogger) {
+	n.logger = contextLogger
 }
 
 func (n *NftSet) APIHandler() http.Handler {

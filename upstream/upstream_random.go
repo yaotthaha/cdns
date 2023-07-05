@@ -15,26 +15,31 @@ import (
 )
 
 type randomUpstream struct {
-	tag          string
-	logger       log.ContextLogger
-	core         adapter.Core
+	tag    string
+	logger log.ContextLogger
+
+	core adapter.Core
+
 	upstreams    []adapter.Upstream
 	upstreamTags []string
 }
 
 var _ adapter.Upstream = (*randomUpstream)(nil)
 
-func NewRandomUpstream(logger log.Logger, core adapter.Core, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewRandomUpstream(rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &randomUpstream{
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
-		core:   core,
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.RandomOption.Upstreams == nil || len(options.RandomOption.Upstreams) == 0 {
+	if options.Options == nil {
+		return nil, fmt.Errorf("create random upstream fail: options is empty")
+	}
+	randomOptions := options.Options.(*upstream.UpstreamRandomOptions)
+	if randomOptions.Upstreams == nil || len(randomOptions.Upstreams) == 0 {
 		return nil, fmt.Errorf("create random upstream fail: upstreams is empty")
 	}
 	u.upstreamTags = make([]string, 0)
-	for _, tag := range options.RandomOption.Upstreams {
+	for _, tag := range randomOptions.Upstreams {
 		u.upstreamTags = append(u.upstreamTags, tag)
 	}
 	return u, nil
@@ -48,6 +53,10 @@ func (u *randomUpstream) Type() string {
 	return constant.UpstreamRandom
 }
 
+func (u *randomUpstream) WithCore(core adapter.Core) {
+	u.core = core
+}
+
 func (u *randomUpstream) Start() error {
 	u.upstreams = make([]adapter.Upstream, 0)
 	for _, tag := range u.upstreamTags {
@@ -57,10 +66,6 @@ func (u *randomUpstream) Start() error {
 		}
 		u.upstreams = append(u.upstreams, up)
 	}
-	return nil
-}
-
-func (u *randomUpstream) Close() error {
 	return nil
 }
 

@@ -5,63 +5,88 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/upstream"
+	"github.com/yaotthaha/cdns/upstream/bootstrap"
 	"github.com/yaotthaha/cdns/upstream/connpool"
+	"github.com/yaotthaha/cdns/upstream/dialer"
 
 	"github.com/miekg/dns"
 )
 
 type tcpUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	dialer       NetDialer
-	address      netip.AddrPort
-	queryTimeout time.Duration
-	idleTimeout  time.Duration
-	connPool     *connpool.ConnPool
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	dialer    dialer.NetDialer
+	domain    string
+	ip        netip.Addr
+	port      uint16
+	bootstrap *bootstrap.Bootstrap
+
+	queryTimeout   time.Duration
+	idleTimeout    time.Duration
+	connectTimeout time.Duration
+
+	connPool *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*tcpUpstream)(nil)
 
-func NewTCPUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewTCPUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &tcpUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.TCPOption.QueryTimeout > 0 {
-		u.queryTimeout = time.Duration(options.TCPOption.QueryTimeout)
+	if options.Options == nil {
+		return nil, fmt.Errorf("create tcp upstream fail: options is empty")
+	}
+	tcpOptions := options.Options.(*upstream.UpstreamTCPOptions)
+	if tcpOptions.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(tcpOptions.QueryTimeout)
 	} else {
 		u.queryTimeout = constant.DNSQueryTimeout
 	}
-	if options.TCPOption.Address == "" {
-		return nil, fmt.Errorf("create tcp upstream fail: address is empty")
-	}
-	ip, err := netip.ParseAddr(options.TCPOption.Address)
-	if err == nil {
-		options.TCPOption.Address = net.JoinHostPort(ip.String(), "53")
-	}
-	address, err := netip.ParseAddrPort(options.TCPOption.Address)
-	if err != nil || !address.IsValid() {
-		return nil, fmt.Errorf("create tcp upstream fail: parse address fail: %s", err)
-	}
-	u.address = address
-	if options.TCPOption.IdleTimeout > 0 {
-		u.idleTimeout = time.Duration(options.TCPOption.IdleTimeout)
+	if tcpOptions.IdleTimeout > 0 {
+		u.idleTimeout = time.Duration(tcpOptions.IdleTimeout)
 	} else {
 		u.idleTimeout = constant.TCPIdleTimeout
 	}
-	dialer, err := newNetDialer(options.DialerOption)
+	if tcpOptions.ConnectTimeout > 0 {
+		u.connectTimeout = time.Duration(tcpOptions.ConnectTimeout)
+	} else {
+		u.connectTimeout = constant.TCPConnectTimeout
+	}
+	domain, ip, port, err := parseAddress(tcpOptions.Address, 53)
+	if err != nil {
+		return nil, fmt.Errorf("create tcp upstream fail: parse address fail: %s", err)
+	}
+	if domain != "" {
+		if tcpOptions.Bootstrap == nil {
+			return nil, fmt.Errorf("create tcp upstream fail: bootstrap is needed when address is domain")
+		}
+		b, err := bootstrap.NewBootstrap(*tcpOptions.Bootstrap)
+		if err != nil {
+			return nil, fmt.Errorf("create tcp upstream fail: create bootstrap fail: %s", err)
+		}
+		u.domain = domain
+		u.bootstrap = b
+	} else {
+		u.ip = ip
+	}
+	u.port = port
+	d, err := dialer.NewNetDialer(tcpOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create tcp upstream fail: create dialer fail: %s", err)
 	}
-	u.dialer = dialer
+	u.dialer = d
 	return u, nil
 }
 
@@ -73,9 +98,31 @@ func (u *tcpUpstream) Type() string {
 	return constant.UpstreamTCP
 }
 
+func (u *tcpUpstream) WithCore(core adapter.Core) {
+	if u.bootstrap != nil {
+		u.bootstrap.WithCore(core)
+	}
+}
+
 func (u *tcpUpstream) Start() error {
 	connPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
-		conn, err := u.dialer.DialContext(u.ctx, constant.NetworkTCP, u.address.String())
+		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+		defer cancel()
+		var (
+			conn net.Conn
+			err  error
+		)
+		if u.domain == "" {
+			address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+			conn, err = u.dialer.DialContext(ctx, constant.NetworkTCP, address)
+		} else {
+			var addresses []string
+			addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+			if err != nil {
+				return nil, err
+			}
+			conn, err = u.dialer.DialParallel(ctx, constant.NetworkTCP, addresses)
+		}
 		if err != nil {
 			return nil, err
 		}

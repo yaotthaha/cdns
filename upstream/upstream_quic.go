@@ -3,11 +3,10 @@ package upstream
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,19 +14,28 @@ import (
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/upstream"
+	"github.com/yaotthaha/cdns/upstream/bootstrap"
+	"github.com/yaotthaha/cdns/upstream/dialer"
 
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 )
 
 type quicUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	dialer       NetDialer
-	address      netip.AddrPort
-	queryTimeout time.Duration
-	idleTimeout  time.Duration
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	dialer    dialer.NetDialer
+	domain    string
+	ip        netip.Addr
+	port      uint16
+	bootstrap *bootstrap.Bootstrap
+
+	queryTimeout   time.Duration
+	idleTimeout    time.Duration
+	connectTimeout time.Duration
+
 	tlsConfig    *tls.Config
 	quicConfig   *quic.Config
 	quicConn     *quicConnection
@@ -36,63 +44,65 @@ type quicUpstream struct {
 
 var _ adapter.Upstream = (*quicUpstream)(nil)
 
-func NewQUICUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewQUICUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &quicUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.QUICOption.QueryTimeout > 0 {
-		u.queryTimeout = time.Duration(options.QUICOption.QueryTimeout)
+	if options.Options == nil {
+		return nil, fmt.Errorf("create quic upstream fail: options is empty")
+	}
+	quicOptions := options.Options.(*upstream.UpstreamQUICOptions)
+	if quicOptions.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(quicOptions.QueryTimeout)
 	} else {
 		u.queryTimeout = constant.DNSQueryTimeout
 	}
-	if options.QUICOption.Address == "" {
-		return nil, fmt.Errorf("create quic upstream fail: address is empty")
+	if quicOptions.IdleTimeout > 0 {
+		u.idleTimeout = time.Duration(quicOptions.IdleTimeout)
+	} else {
+		u.idleTimeout = constant.UDPIdleTimeout
 	}
-	ip, err := netip.ParseAddr(options.QUICOption.Address)
-	if err == nil {
-		options.QUICOption.Address = net.JoinHostPort(ip.String(), "784")
+	if quicOptions.ConnectTimeout > 0 {
+		u.connectTimeout = time.Duration(quicOptions.ConnectTimeout)
+	} else {
+		u.connectTimeout = constant.UDPConnectTimeout
 	}
-	address, err := netip.ParseAddrPort(options.QUICOption.Address)
-	if err != nil || !address.IsValid() {
+	domain, ip, port, err := parseAddress(quicOptions.Address, 784)
+	if err != nil {
 		return nil, fmt.Errorf("create quic upstream fail: parse address fail: %s", err)
 	}
-	u.address = address
-	dialer, err := newNetDialer(options.DialerOption)
+	if domain != "" {
+		if quicOptions.Bootstrap == nil {
+			return nil, fmt.Errorf("create quic upstream fail: bootstrap is needed when address is domain")
+		}
+		b, err := bootstrap.NewBootstrap(*quicOptions.Bootstrap)
+		if err != nil {
+			return nil, fmt.Errorf("create quic upstream fail: create bootstrap fail: %s", err)
+		}
+		u.domain = domain
+		u.bootstrap = b
+	} else {
+		u.ip = ip
+	}
+	u.port = port
+	d, err := dialer.NewNetDialer(quicOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create quic upstream fail: create dialer fail: %s", err)
 	}
-	u.dialer = dialer
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.QUICOption.InsecureSkipVerify,
-		ServerName:         options.QUICOption.ServerName,
-		NextProtos:         []string{"doq"},
+	u.dialer = d
+	var serverName string
+	if u.domain != "" {
+		serverName = u.domain
+	} else {
+		serverName = u.ip.String()
 	}
-	if tlsConfig.ServerName == "" {
-		tlsConfig.ServerName = u.address.Addr().String()
+	tlsConfig, err := parseTLSOptions(quicOptions.TLSOptions, serverName)
+	if err != nil {
+		return nil, fmt.Errorf("create quic upstream fail: %s", err)
 	}
-	if options.QUICOption.ClientCertFile != "" && options.QUICOption.ClientKeyFile == "" {
-		return nil, fmt.Errorf("create quic upstream fail: client_key_file not found")
-	} else if options.QUICOption.ClientCertFile == "" && options.QUICOption.ClientKeyFile != "" {
-		return nil, fmt.Errorf("create quic upstream fail: client_cert_file not found")
-	} else if options.QUICOption.ClientCertFile != "" && options.QUICOption.ClientKeyFile != "" {
-		keyPair, err := tls.LoadX509KeyPair(options.QUICOption.ClientCertFile, options.QUICOption.ClientKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("create quic upstream fail: load x509 key pair fail: %s", err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{keyPair}
-	}
-	if options.QUICOption.CAFile != "" {
-		caContent, err := os.ReadFile(options.QUICOption.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("create quic upstream fail: load ca fail: %s", err)
-		}
-		tlsConfig.RootCAs = x509.NewCertPool()
-		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create quic upstream fail: append ca fail")
-		}
-	}
+	tlsConfig.NextProtos = []string{"doq"}
 	u.tlsConfig = tlsConfig
 	u.quicConfig = &quic.Config{
 		TokenStore:                     quic.NewLRUTokenStore(4, 8),
@@ -117,26 +127,37 @@ func (u *quicUpstream) Start() error {
 	return nil
 }
 
-func (u *quicUpstream) Close() error {
-	return nil
-}
-
 func (u *quicUpstream) ContextLogger() log.ContextLogger {
 	return u.logger
 }
 
 func (u *quicUpstream) createQUICConnection() (quic.Connection, net.Conn, error) {
-	u.logger.Debug("open new connection")
-	udpConn, err := u.dialer.DialContext(u.ctx, constant.NetworkUDP, u.address.String())
+	ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+	defer cancel()
+	var (
+		udpConn net.Conn
+		err     error
+	)
+	if u.domain == "" {
+		address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+		udpConn, err = u.dialer.DialContext(ctx, constant.NetworkUDP, address)
+	} else {
+		var addresses []string
+		addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+		if err != nil {
+			return nil, nil, err
+		}
+		udpConn, err = u.dialer.DialParallel(ctx, constant.NetworkUDP, addresses)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
-	u.logger.Debug("open quic connection")
-	quicConn, err := quic.DialEarly(u.ctx, newPacketConn(udpConn), udpConn.RemoteAddr(), u.tlsConfig, u.quicConfig)
+	u.logger.Debug("open new udp connection")
+	quicConn, err := quic.DialEarly(u.ctx, newPacketConn(udpConn), udpConn.RemoteAddr(), u.tlsConfig.Clone(), u.quicConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	u.logger.Debug("open new connection success")
+	u.logger.Debug("open new quic connection")
 	return quicConn, udpConn, nil
 }
 

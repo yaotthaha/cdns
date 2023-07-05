@@ -3,7 +3,6 @@ package workflow_go
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -13,7 +12,12 @@ import (
 
 const PluginType = "workflow-go"
 
-var _ adapter.ExecPlugin = (*WorkflowGo)(nil)
+var (
+	_ adapter.ExecPlugin         = (*WorkflowGo)(nil)
+	_ adapter.WithContext        = (*WorkflowGo)(nil)
+	_ adapter.WithContextLogger  = (*WorkflowGo)(nil)
+	_ adapter.WithExecPluginCore = (*WorkflowGo)(nil)
+)
 
 func init() {
 	adapter.RegisterExecPlugin(PluginType, NewWorkflowGo)
@@ -41,28 +45,16 @@ func (w *WorkflowGo) Type() string {
 	return PluginType
 }
 
-func (w *WorkflowGo) Start() error {
-	return nil
-}
-
-func (w *WorkflowGo) Close() error {
-	return nil
-}
-
 func (w *WorkflowGo) WithContext(ctx context.Context) {
 	w.ctx = ctx
 }
 
-func (w *WorkflowGo) WithLogger(logger log.ContextLogger) {
-	w.logger = logger
+func (w *WorkflowGo) WithContextLogger(contextLogger log.ContextLogger) {
+	w.logger = contextLogger
 }
 
 func (w *WorkflowGo) WithCore(core adapter.ExecPluginCore) {
 	w.core = core
-}
-
-func (w *WorkflowGo) APIHandler() http.Handler {
-	return nil
 }
 
 type respMsg struct {

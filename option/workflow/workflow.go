@@ -11,12 +11,12 @@ type _WorkflowOption struct {
 	Rules []map[string]any `yaml:"rules"`
 }
 
-type WorkflowOption struct {
+type WorkflowOptions struct {
 	Tag   string `yaml:"tag"`
 	Rules []any  `yaml:"rules"`
 }
 
-func (w *WorkflowOption) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var workflowOption _WorkflowOption
 	err := unmarshal(&workflowOption)
 	if err != nil {

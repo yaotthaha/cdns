@@ -4,20 +4,21 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
-	"os"
+	"strconv"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/upstream"
+	"github.com/yaotthaha/cdns/upstream/bootstrap"
+	"github.com/yaotthaha/cdns/upstream/dialer"
 
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
@@ -25,104 +26,128 @@ import (
 )
 
 type httpsUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	dialer       NetDialer
-	address      netip.AddrPort
-	httpClient   *http.Client
-	useH3        bool
-	url          *url.URL
-	header       http.Header
-	queryTimeout time.Duration
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	dialer    dialer.NetDialer
+	domain    string
+	ip        netip.Addr
+	port      uint16
+	bootstrap *bootstrap.Bootstrap
+
+	connectTimeout time.Duration
+	queryTimeout   time.Duration
+
+	url        *url.URL
+	httpClient *http.Client
+	enableH3   bool
+	path       string
+	header     http.Header
 }
 
 var _ adapter.Upstream = (*httpsUpstream)(nil)
 
-func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewHTTPSUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &httpsUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.HTTPSOption.QueryTimeout > 0 {
-		u.queryTimeout = time.Duration(options.HTTPSOption.QueryTimeout)
+	if options.Options == nil {
+		return nil, fmt.Errorf("create https upstream fail: options is empty")
+	}
+	httpsOptions := options.Options.(*upstream.UpstreamHTTPSOptions)
+	if httpsOptions.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(httpsOptions.QueryTimeout)
 	} else {
 		u.queryTimeout = constant.DNSQueryTimeout
 	}
-	if options.HTTPSOption.Address == "" {
-		return nil, fmt.Errorf("create https upstream fail: address is empty")
-	}
-	ip, err := netip.ParseAddr(options.HTTPSOption.Address)
-	if err == nil {
-		options.HTTPSOption.Address = net.JoinHostPort(ip.String(), "443")
-	}
-	address, err := netip.ParseAddrPort(options.HTTPSOption.Address)
-	if err != nil || !address.IsValid() {
+	domain, ip, port, err := parseAddress(httpsOptions.Address, 443)
+	if err != nil {
 		return nil, fmt.Errorf("create https upstream fail: parse address fail: %s", err)
 	}
-	u.address = address
-	dialer, err := newNetDialer(options.DialerOption)
+	if domain != "" {
+		if httpsOptions.Bootstrap == nil {
+			return nil, fmt.Errorf("create https upstream fail: bootstrap is needed when address is domain")
+		}
+		b, err := bootstrap.NewBootstrap(*httpsOptions.Bootstrap)
+		if err != nil {
+			return nil, fmt.Errorf("create https upstream fail: create bootstrap fail: %s", err)
+		}
+		u.domain = domain
+		u.bootstrap = b
+	} else {
+		u.ip = ip
+	}
+	u.port = port
+	d, err := dialer.NewNetDialer(httpsOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create https upstream fail: create dialer fail: %s", err)
 	}
-	u.dialer = dialer
-	if options.HTTPSOption.URL == "" {
-		return nil, fmt.Errorf("create https upstream fail: url is empty")
+	u.dialer = d
+	uu := &url.URL{
+		Scheme: "https",
 	}
-	u.url, err = url.Parse(options.HTTPSOption.URL)
-	if err != nil {
-		return nil, fmt.Errorf("create https upstream fail: parse url fail: %s", err)
+	if httpsOptions.Path != "" {
+		uu.Path = httpsOptions.Path
+	} else {
+		uu.Path = "/dns-query"
 	}
-	if u.url.Scheme != "https" {
-		return nil, fmt.Errorf("create https upstream fail: url scheme is not https")
-	}
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.HTTPSOption.InsecureSkipVerify,
-		ServerName:         options.HTTPSOption.ServerName,
-		NextProtos:         []string{"dns"},
-	}
-	if tlsConfig.ServerName == "" {
-		tlsConfig.ServerName = u.url.Hostname()
-	}
-	if options.HTTPSOption.ClientCertFile != "" && options.HTTPSOption.ClientKeyFile == "" {
-		return nil, fmt.Errorf("create https upstream fail: client_key_file not found")
-	} else if options.HTTPSOption.ClientCertFile == "" && options.HTTPSOption.ClientKeyFile != "" {
-		return nil, fmt.Errorf("create https upstream fail: client_cert_file not found")
-	} else if options.HTTPSOption.ClientCertFile != "" && options.HTTPSOption.ClientKeyFile != "" {
-		keyPair, err := tls.LoadX509KeyPair(options.HTTPSOption.ClientCertFile, options.HTTPSOption.ClientKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("create https upstream fail: load x509 key pair fail: %s", err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{keyPair}
-	}
-	if options.HTTPSOption.CAFile != "" {
-		caContent, err := os.ReadFile(options.HTTPSOption.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("create https upstream fail: load ca fail: %s", err)
-		}
-		tlsConfig.RootCAs = x509.NewCertPool()
-		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create https upstream fail: append ca fail")
-		}
-	}
-	if options.HTTPSOption.Header != nil {
+	if httpsOptions.Header != nil {
 		u.header = http.Header{}
-		for k, v := range options.HTTPSOption.Header {
+		for k, v := range httpsOptions.Header {
 			u.header.Set(k, v)
 		}
 	}
+	var serverName string
+	if host := u.header.Get("Host"); host != "" {
+		serverName = host
+	} else if u.domain != "" {
+		serverName = u.domain
+	} else {
+		serverName = u.ip.String()
+	}
+	var urlHost string
+	if u.domain != "" {
+		urlHost = net.JoinHostPort(u.domain, strconv.Itoa(int(u.port)))
+	} else {
+		urlHost = net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+	}
+	uu.Host = urlHost
+	u.url = uu
+	tlsConfig, err := parseTLSOptions(httpsOptions.TLSOptions, serverName)
+	if err != nil {
+		return nil, fmt.Errorf("create https upstream fail: %s", err)
+	}
+	tlsConfig.NextProtos = []string{"dns"}
 	u.httpClient = &http.Client{}
-	if !options.HTTPSOption.UseH3 {
+	if !httpsOptions.EnableH3 {
 		var idleTimeout time.Duration
-		if options.HTTPSOption.IdleTimeout > 0 {
-			idleTimeout = time.Duration(options.HTTPSOption.IdleTimeout)
+		if httpsOptions.IdleTimeout > 0 {
+			idleTimeout = time.Duration(httpsOptions.IdleTimeout)
 		} else {
 			idleTimeout = constant.TCPIdleTimeout
 		}
 		u.httpClient.Transport = &http.Transport{
 			DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
-				conn, err := u.dialer.DialContext(ctx, constant.NetworkTCP, u.address.String())
+				ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+				defer cancel()
+				var (
+					conn net.Conn
+					err  error
+				)
+				if u.domain == "" {
+					address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+					conn, err = u.dialer.DialContext(ctx, constant.NetworkTCP, address)
+				} else {
+					var addresses []string
+					addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+					if err != nil {
+						return nil, err
+					}
+					conn, err = u.dialer.DialParallel(ctx, constant.NetworkTCP, addresses)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -137,9 +162,28 @@ func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.U
 			ForceAttemptHTTP2:     true,
 		}
 	} else {
+		if httpsOptions.Dialer.Socks5 != nil {
+			return nil, fmt.Errorf("create https upstream fail: socks5 is not supported")
+		}
 		u.httpClient.Transport = &http3.RoundTripper{
 			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
-				conn, err := u.dialer.DialContext(ctx, constant.UpstreamUDP, u.address.String())
+				ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+				defer cancel()
+				var (
+					conn net.Conn
+					err  error
+				)
+				if u.domain == "" {
+					address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+					conn, err = u.dialer.DialContext(ctx, constant.NetworkUDP, address)
+				} else {
+					var addresses []string
+					addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+					if err != nil {
+						return nil, err
+					}
+					conn, err = u.dialer.DialParallel(ctx, constant.NetworkUDP, addresses)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -153,7 +197,7 @@ func NewHTTPSUpstream(ctx context.Context, logger log.Logger, options upstream.U
 			},
 			TLSClientConfig: tlsConfig,
 		}
-		u.useH3 = true
+		u.enableH3 = true
 	}
 	return u, nil
 }
@@ -166,12 +210,10 @@ func (u *httpsUpstream) Type() string {
 	return constant.UpstreamHTTPS
 }
 
-func (u *httpsUpstream) Start() error {
-	return nil
-}
-
-func (u *httpsUpstream) Close() error {
-	return nil
+func (u *httpsUpstream) WithCore(core adapter.Core) {
+	if u.bootstrap != nil {
+		u.bootstrap.WithCore(core)
+	}
 }
 
 func (u *httpsUpstream) ContextLogger() log.ContextLogger {
@@ -187,7 +229,7 @@ func (u *httpsUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg
 		u.logger.ErrorContext(ctx, err)
 		return nil, err
 	}
-	u.logger.DebugContext(ctx, fmt.Sprintf("create http request, use http3: %t", u.useH3))
+	u.logger.DebugContext(ctx, fmt.Sprintf("create http request, use http3: %t", u.enableH3))
 	req, err := http.NewRequest(http.MethodPost, u.url.String(), bytes.NewBuffer(rawDNSMsg))
 	if err != nil {
 		err = fmt.Errorf("create http request fail: %s", err)

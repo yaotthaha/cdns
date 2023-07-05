@@ -28,7 +28,12 @@ func init() {
 	adapter.RegisterMatchPlugin(PluginType, NewDomain)
 }
 
-var _ adapter.MatchPlugin = (*Domain)(nil)
+var (
+	_ adapter.MatchPlugin       = (*Domain)(nil)
+	_ adapter.Starter           = (*Domain)(nil)
+	_ adapter.WithContextLogger = (*Domain)(nil)
+	_ adapter.APIHandler        = (*Domain)(nil)
+)
 
 type Domain struct {
 	tag        string
@@ -164,14 +169,7 @@ func (d *Domain) Start() error {
 	return nil
 }
 
-func (d *Domain) Close() error {
-	return nil
-}
-
-func (d *Domain) WithContext(_ context.Context) {
-}
-
-func (d *Domain) WithLogger(contextLogger log.ContextLogger) {
+func (d *Domain) WithContextLogger(contextLogger log.ContextLogger) {
 	d.logger = contextLogger
 }
 

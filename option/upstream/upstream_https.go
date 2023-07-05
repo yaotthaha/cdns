@@ -4,16 +4,15 @@ import (
 	"github.com/yaotthaha/cdns/lib/types"
 )
 
-type UpstreamHTTPSOption struct {
-	Address            string             `yaml:"address"`
-	QueryTimeout       types.TimeDuration `yaml:"query_timeout,omitempty"`
-	IdleTimeout        types.TimeDuration `yaml:"idle_timeout,omitempty"`
-	URL                string             `yaml:"url"`
-	Header             map[string]string  `yaml:"header,omitempty"`
-	UseH3              bool               `yaml:"use_h3,omitempty"`
-	InsecureSkipVerify bool               `yaml:"insecure_skip_verify,omitempty"`
-	ServerName         string             `yaml:"server_name,omitempty"`
-	CAFile             string             `yaml:"ca_file,omitempty"`
-	ClientCertFile     string             `yaml:"client_cert_file,omitempty"`
-	ClientKeyFile      string             `yaml:"client_key_file,omitempty"`
+type UpstreamHTTPSOptions struct {
+	Address        string `yaml:"address"`
+	TLSOptions     `yaml:",inline"`
+	ConnectTimeout types.TimeDuration `yaml:"connect-timeout,omitempty"`
+	IdleTimeout    types.TimeDuration `yaml:"idle-timeout,omitempty"`
+	QueryTimeout   types.TimeDuration `yaml:"query-timeout,omitempty"`
+	Path           string             `yaml:"path"`
+	Header         map[string]string  `yaml:"header,omitempty"`
+	EnableH3       bool               `yaml:"enable-h3,omitempty"`
+	Dialer         DialerOptions      `yaml:"dialer,omitempty"`
+	Bootstrap      *BootstrapOptions  `yaml:"bootstrap,omitempty"`
 }

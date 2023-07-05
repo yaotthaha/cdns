@@ -8,3 +8,7 @@ type Core interface {
 	GetMatchPlugin(string) MatchPlugin
 	GetExecPlugin(string) ExecPlugin
 }
+
+type WithCore interface {
+	WithCore(Core)
+}

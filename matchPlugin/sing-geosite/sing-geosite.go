@@ -22,7 +22,13 @@ import (
 
 const PluginType = "sing-geosite"
 
-var _ adapter.MatchPlugin = (*SingGeoSite)(nil)
+var (
+	_ adapter.MatchPlugin       = (*SingGeoSite)(nil)
+	_ adapter.Starter           = (*SingGeoSite)(nil)
+	_ adapter.WithContext       = (*SingGeoSite)(nil)
+	_ adapter.WithContextLogger = (*SingGeoSite)(nil)
+	_ adapter.APIHandler        = (*SingGeoSite)(nil)
+)
 
 func init() {
 	adapter.RegisterMatchPlugin(PluginType, NewSingGeoSite)
@@ -214,15 +220,11 @@ func (s *SingGeoSite) Start() error {
 	return nil
 }
 
-func (s *SingGeoSite) Close() error {
-	return nil
-}
-
 func (s *SingGeoSite) WithContext(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *SingGeoSite) WithLogger(contextLogger log.ContextLogger) {
+func (s *SingGeoSite) WithContextLogger(contextLogger log.ContextLogger) {
 	s.logger = contextLogger
 }
 

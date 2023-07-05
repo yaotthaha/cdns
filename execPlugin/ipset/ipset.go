@@ -18,7 +18,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*IPSet)(nil)
+var (
+	_ adapter.ExecPlugin        = (*IPSet)(nil)
+	_ adapter.Starter           = (*IPSet)(nil)
+	_ adapter.Closer            = (*IPSet)(nil)
+	_ adapter.WithContextLogger = (*IPSet)(nil)
+	_ adapter.APIHandler        = (*IPSet)(nil)
+)
 
 const PluginType = "ipset"
 
@@ -106,14 +112,8 @@ func (i *IPSet) Close() error {
 	return nil
 }
 
-func (i *IPSet) WithContext(_ context.Context) {
-}
-
-func (i *IPSet) WithLogger(logger log.ContextLogger) {
-	i.logger = logger
-}
-
-func (i *IPSet) WithCore(_ adapter.ExecPluginCore) {
+func (i *IPSet) WithContextLogger(contextLogger log.ContextLogger) {
+	i.logger = contextLogger
 }
 
 func (i *IPSet) APIHandler() http.Handler {

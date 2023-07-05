@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-
-	"github.com/yaotthaha/cdns/log"
 )
 
 type MatchPluginCore interface{}
@@ -14,12 +12,11 @@ type MatchPluginCore interface{}
 type MatchPlugin interface {
 	Tag() string
 	Type() string
-	Start() error
-	Close() error
-	WithContext(context.Context)
-	WithLogger(log.ContextLogger)
-	APIHandler() http.Handler
 	Match(context.Context, map[string]any, *DNSContext) bool // true: match, false: no match
+}
+
+type WithMatchPluginCore interface {
+	WithCore(MatchPluginCore)
 }
 
 type ExecPluginCore interface {
@@ -30,13 +27,15 @@ type ExecPluginCore interface {
 type ExecPlugin interface {
 	Tag() string
 	Type() string
-	Start() error
-	Close() error
-	WithContext(context.Context)
-	WithLogger(log.ContextLogger)
-	WithCore(ExecPluginCore)
-	APIHandler() http.Handler
 	Exec(context.Context, map[string]any, *DNSContext) bool // true: continue, false: stop
+}
+
+type WithExecPluginCore interface {
+	WithCore(ExecPluginCore)
+}
+
+type APIHandler interface {
+	APIHandler() http.Handler
 }
 
 type CreateMatchPluginFunc func(string, map[string]any) (MatchPlugin, error)

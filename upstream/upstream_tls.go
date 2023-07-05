@@ -3,96 +3,101 @@ package upstream
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
+	"strconv"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/upstream"
+	"github.com/yaotthaha/cdns/upstream/bootstrap"
 	"github.com/yaotthaha/cdns/upstream/connpool"
+	"github.com/yaotthaha/cdns/upstream/dialer"
 
 	"github.com/miekg/dns"
 )
 
 type tlsUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	dialer       NetDialer
-	address      netip.AddrPort
-	queryTimeout time.Duration
-	idleTimeout  time.Duration
-	tlsConfig    *tls.Config
-	connPool     *connpool.ConnPool
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	dialer    dialer.NetDialer
+	domain    string
+	ip        netip.Addr
+	port      uint16
+	bootstrap *bootstrap.Bootstrap
+
+	queryTimeout   time.Duration
+	idleTimeout    time.Duration
+	connectTimeout time.Duration
+
+	tlsConfig *tls.Config
+	connPool  *connpool.ConnPool
 }
 
 var _ adapter.Upstream = (*tlsUpstream)(nil)
 
-func NewTLSUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewTLSUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &tlsUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 	}
-	if options.TLSOption.QueryTimeout > 0 {
-		u.queryTimeout = time.Duration(options.TLSOption.QueryTimeout)
+	if options.Options == nil {
+		return nil, fmt.Errorf("create tls upstream fail: options is empty")
+	}
+	tlsOptions := options.Options.(*upstream.UpstreamTLSOptions)
+	if tlsOptions.QueryTimeout > 0 {
+		u.queryTimeout = time.Duration(tlsOptions.QueryTimeout)
 	} else {
 		u.queryTimeout = constant.DNSQueryTimeout
 	}
-	if options.TLSOption.Address == "" {
-		return nil, fmt.Errorf("create tls upstream fail: address is empty")
-	}
-	ip, err := netip.ParseAddr(options.TLSOption.Address)
-	if err == nil {
-		options.TLSOption.Address = net.JoinHostPort(ip.String(), "853")
-	}
-	address, err := netip.ParseAddrPort(options.TLSOption.Address)
-	if err != nil || !address.IsValid() {
-		return nil, fmt.Errorf("create tls upstream fail: parse address fail: %s", err)
-	}
-	u.address = address
-	if options.TLSOption.IdleTimeout > 0 {
-		u.idleTimeout = time.Duration(options.TLSOption.IdleTimeout)
+	if tlsOptions.IdleTimeout > 0 {
+		u.idleTimeout = time.Duration(tlsOptions.IdleTimeout)
 	} else {
 		u.idleTimeout = constant.TCPIdleTimeout
 	}
-	dialer, err := newNetDialer(options.DialerOption)
+	if tlsOptions.ConnectTimeout > 0 {
+		u.connectTimeout = time.Duration(tlsOptions.ConnectTimeout)
+	} else {
+		u.connectTimeout = constant.TCPConnectTimeout
+	}
+	domain, ip, port, err := parseAddress(tlsOptions.Address, 853)
+	if err != nil {
+		return nil, fmt.Errorf("create tls upstream fail: parse address fail: %s", err)
+	}
+	if domain != "" {
+		if tlsOptions.Bootstrap == nil {
+			return nil, fmt.Errorf("create tls upstream fail: bootstrap is needed when address is domain")
+		}
+		b, err := bootstrap.NewBootstrap(*tlsOptions.Bootstrap)
+		if err != nil {
+			return nil, fmt.Errorf("create tls upstream fail: create bootstrap fail: %s", err)
+		}
+		u.domain = domain
+		u.bootstrap = b
+	} else {
+		u.ip = ip
+	}
+	u.port = port
+	d, err := dialer.NewNetDialer(tlsOptions.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("create tls upstream fail: create dialer fail: %s", err)
 	}
-	u.dialer = dialer
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.TLSOption.InsecureSkipVerify,
-		ServerName:         options.TLSOption.ServerName,
+	u.dialer = d
+	var serverName string
+	if u.domain != "" {
+		serverName = u.domain
+	} else {
+		serverName = u.ip.String()
 	}
-	if tlsConfig.ServerName == "" {
-		tlsConfig.ServerName = u.address.Addr().String()
-	}
-	if options.TLSOption.ClientCertFile != "" && options.TLSOption.ClientKeyFile == "" {
-		return nil, fmt.Errorf("create tls upstream: client_key_file not found")
-	} else if options.TLSOption.ClientCertFile == "" && options.TLSOption.ClientKeyFile != "" {
-		return nil, fmt.Errorf("create tls upstream: client_cert_file not found")
-	} else if options.TLSOption.ClientCertFile != "" && options.TLSOption.ClientKeyFile != "" {
-		keyPair, err := tls.LoadX509KeyPair(options.TLSOption.ClientCertFile, options.TLSOption.ClientKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("create tls upstream fail: load x509 key pair fail: %s", err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{keyPair}
-	}
-	if options.TLSOption.CAFile != "" {
-		caContent, err := os.ReadFile(options.TLSOption.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("create tls upstream fail: load ca fail: %s", err)
-		}
-		tlsConfig.RootCAs = x509.NewCertPool()
-		if !tlsConfig.RootCAs.AppendCertsFromPEM(caContent) {
-			return nil, fmt.Errorf("create tls upstream fail: append ca fail")
-		}
+	tlsConfig, err := parseTLSOptions(tlsOptions.TLSOptions, serverName)
+	if err != nil {
+		return nil, fmt.Errorf("create tls upstream fail: %s", err)
 	}
 	u.tlsConfig = tlsConfig
 	return u, nil
@@ -106,9 +111,31 @@ func (u *tlsUpstream) Type() string {
 	return constant.UpstreamTLS
 }
 
+func (u *tlsUpstream) WithCore(core adapter.Core) {
+	if u.bootstrap != nil {
+		u.bootstrap.WithCore(core)
+	}
+}
+
 func (u *tlsUpstream) Start() error {
 	connPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
-		conn, err := u.dialer.DialContext(u.ctx, constant.NetworkTCP, u.address.String())
+		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
+		defer cancel()
+		var (
+			conn net.Conn
+			err  error
+		)
+		if u.domain == "" {
+			address := net.JoinHostPort(u.ip.String(), strconv.Itoa(int(u.port)))
+			conn, err = u.dialer.DialContext(ctx, constant.NetworkTCP, address)
+		} else {
+			var addresses []string
+			addresses, err = u.bootstrap.QueryAddress(ctx, u.domain, u.port)
+			if err != nil {
+				return nil, err
+			}
+			conn, err = u.dialer.DialParallel(ctx, constant.NetworkTCP, addresses)
+		}
 		if err != nil {
 			return nil, err
 		}

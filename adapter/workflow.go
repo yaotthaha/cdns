@@ -4,5 +4,5 @@ import "context"
 
 type Workflow interface {
 	Tag() string
-	Exec(context.Context, *DNSContext) bool // true: continue, false: stop
+	Exec(context.Context, *DNSContext) (continueExec bool) // true: continue, false: stop
 }

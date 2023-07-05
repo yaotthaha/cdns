@@ -21,7 +21,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*Hosts)(nil)
+var (
+	_ adapter.ExecPlugin        = (*Hosts)(nil)
+	_ adapter.Starter           = (*Hosts)(nil)
+	_ adapter.WithContextLogger = (*Hosts)(nil)
+	_ adapter.APIHandler        = (*Hosts)(nil)
+)
 
 const PluginType = "hosts"
 
@@ -93,18 +98,8 @@ func (h *Hosts) Start() error {
 	return nil
 }
 
-func (h *Hosts) Close() error {
-	return nil
-}
-
-func (h *Hosts) WithContext(_ context.Context) {
-}
-
-func (h *Hosts) WithLogger(logger log.ContextLogger) {
-	h.logger = logger
-}
-
-func (h *Hosts) WithCore(_ adapter.ExecPluginCore) {
+func (h *Hosts) WithContextLogger(contextLogger log.ContextLogger) {
+	h.logger = contextLogger
 }
 
 func (h *Hosts) APIHandler() http.Handler {

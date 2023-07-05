@@ -16,13 +16,16 @@ import (
 )
 
 type queryTestUpstream struct {
-	ctx          context.Context
-	tag          string
-	logger       log.ContextLogger
-	core         adapter.Core
+	ctx    context.Context
+	tag    string
+	logger log.ContextLogger
+
+	core adapter.Core
+
 	upstreams    []adapter.Upstream
 	upstreamTags []string
 	upstreamMap  map[adapter.Upstream]*atomic.Pointer[testResult]
+
 	fallback     bool
 	testInterval time.Duration
 	testDomain   string
@@ -36,87 +39,90 @@ const (
 
 var _ adapter.Upstream = (*queryTestUpstream)(nil)
 
-func NewQueryTestUpstream(ctx context.Context, logger log.Logger, core adapter.Core, options upstream.UpstreamOption) (adapter.Upstream, error) {
+func NewQueryTestUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	f := &queryTestUpstream{
 		ctx:    ctx,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
-		core:   core,
+		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 		tag:    options.Tag,
 	}
-	if options.QueryTestOption.Upstreams == nil || len(options.QueryTestOption.Upstreams) == 0 {
+	if options.Options == nil {
+		return nil, fmt.Errorf("create querytest upstream fail: options is empty")
+	}
+	querytestOptions := options.Options.(*upstream.UpstreamQueryTestOptions)
+	if querytestOptions.Upstreams == nil || len(querytestOptions.Upstreams) == 0 {
 		return nil, fmt.Errorf("create querytest upstream fail: upstreams is empty")
 	}
 	f.upstreamTags = make([]string, 0)
-	for _, tag := range options.QueryTestOption.Upstreams {
+	for _, tag := range querytestOptions.Upstreams {
 		f.upstreamTags = append(f.upstreamTags, tag)
 	}
-	if options.QueryTestOption.TestInterval > 0 {
-		f.testInterval = time.Duration(options.QueryTestOption.TestInterval)
+	if querytestOptions.TestInterval > 0 {
+		f.testInterval = time.Duration(querytestOptions.TestInterval)
 	} else {
 		f.testInterval = testInterval
 	}
-	if options.QueryTestOption.TestDomain != "" {
-		f.testDomain = options.QueryTestOption.TestDomain
+	if querytestOptions.TestDomain != "" {
+		f.testDomain = querytestOptions.TestDomain
 	} else {
 		f.testDomain = testDomain
 	}
-	f.fallback = options.QueryTestOption.Fallback
+	f.fallback = querytestOptions.Fallback
 	return f, nil
 }
 
-func (f *queryTestUpstream) Tag() string {
-	return f.tag
+func (u *queryTestUpstream) Tag() string {
+	return u.tag
 }
 
-func (f *queryTestUpstream) Type() string {
+func (u *queryTestUpstream) Type() string {
 	return constant.UpstreamQueryTest
 }
 
-func (f *queryTestUpstream) Start() error {
-	f.upstreams = make([]adapter.Upstream, 0)
-	f.upstreamMap = make(map[adapter.Upstream]*atomic.Pointer[testResult])
-	for _, tag := range f.upstreamTags {
-		up := f.core.GetUpstream(tag)
+func (u *queryTestUpstream) WithCore(core adapter.Core) {
+	u.core = core
+}
+
+func (u *queryTestUpstream) Start() error {
+	u.upstreams = make([]adapter.Upstream, 0)
+	u.upstreamMap = make(map[adapter.Upstream]*atomic.Pointer[testResult])
+	for _, tag := range u.upstreamTags {
+		up := u.core.GetUpstream(tag)
 		if up == nil {
 			return fmt.Errorf("start querytest upstream fail: upstream [%s] not found", tag)
 		}
-		f.upstreams = append(f.upstreams, up)
-		f.upstreamMap[up] = new(atomic.Pointer[testResult])
+		u.upstreams = append(u.upstreams, up)
+		u.upstreamMap[up] = new(atomic.Pointer[testResult])
 	}
-	f.test()
-	go f.keepTest()
+	u.test()
+	go u.keepTest()
 	return nil
 }
 
-func (f *queryTestUpstream) Close() error {
-	return nil
+func (u *queryTestUpstream) ContextLogger() log.ContextLogger {
+	return u.logger
 }
 
-func (f *queryTestUpstream) ContextLogger() log.ContextLogger {
-	return f.logger
-}
-
-func (f *queryTestUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
-	up := f.getBestUpstream()
-	f.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
+func (u *queryTestUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error) {
+	up := u.getBestUpstream()
+	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
 	return up.Exchange(ctx, dnsMsg)
 }
 
-func (f *queryTestUpstream) test() {
-	if !f.testLock.TryLock() {
+func (u *queryTestUpstream) test() {
+	if !u.testLock.TryLock() {
 		return
 	}
-	defer f.testLock.Unlock()
+	defer u.testLock.Unlock()
 	wg := sync.WaitGroup{}
-	for u, p := range f.upstreamMap {
+	for up, p := range u.upstreamMap {
 		wg.Add(1)
 		go func(upstream adapter.Upstream, p *atomic.Pointer[testResult]) {
 			defer wg.Done()
-			ctx, cancel := context.WithTimeout(f.ctx, constant.DNSQueryTimeout)
+			ctx, cancel := context.WithTimeout(u.ctx, constant.DNSQueryTimeout)
 			defer cancel()
-			upstream.ContextLogger().Debug(fmt.Sprintf("querytest upstream [%s] test", f.tag))
+			upstream.ContextLogger().Debug(fmt.Sprintf("querytest upstream [%s] test", u.tag))
 			start := time.Now()
-			_, err := upstream.Exchange(ctx, f.newDNSMsg())
+			_, err := upstream.Exchange(ctx, u.newDNSMsg())
 			delay := time.Since(start)
 			if err == nil {
 				p.Store(&testResult{
@@ -126,44 +132,44 @@ func (f *queryTestUpstream) test() {
 			} else {
 				p.Store(nil)
 			}
-		}(u, p)
+		}(up, p)
 	}
 	wg.Wait()
 }
 
-func (f *queryTestUpstream) keepTest() {
-	ticker := time.NewTicker(f.testInterval)
+func (u *queryTestUpstream) keepTest() {
+	ticker := time.NewTicker(u.testInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			f.test()
-		case <-f.ctx.Done():
+			u.test()
+		case <-u.ctx.Done():
 			return
 		}
 	}
 }
 
-func (f *queryTestUpstream) getBestUpstream() adapter.Upstream {
+func (u *queryTestUpstream) getBestUpstream() adapter.Upstream {
 	var (
 		minDelay     time.Duration
 		bestUpstream adapter.Upstream
 	)
-	for _, u := range f.upstreams {
-		test := f.upstreamMap[u].Load()
+	for _, up := range u.upstreams {
+		test := u.upstreamMap[up].Load()
 		if test == nil {
 			continue
 		}
 		if minDelay == 0 || test.delay < minDelay {
 			minDelay = test.delay
-			bestUpstream = u
-			if f.fallback {
+			bestUpstream = up
+			if u.fallback {
 				break
 			}
 		}
 	}
 	if bestUpstream == nil {
-		bestUpstream = f.upstreams[0]
+		bestUpstream = u.upstreams[0]
 	}
 	return bestUpstream
 }
@@ -173,8 +179,8 @@ type testResult struct {
 	delay time.Duration
 }
 
-func (f *queryTestUpstream) newDNSMsg() *dns.Msg {
+func (u *queryTestUpstream) newDNSMsg() *dns.Msg {
 	d := new(dns.Msg)
-	d.SetQuestion(dns.Fqdn(f.testDomain), dns.TypeA)
+	d.SetQuestion(dns.Fqdn(u.testDomain), dns.TypeA)
 	return d
 }

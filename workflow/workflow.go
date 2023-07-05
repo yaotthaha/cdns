@@ -16,7 +16,7 @@ type Workflow struct {
 	rules  []*Rule
 }
 
-func NewWorkflow(core adapter.Core, logger log.Logger, options workflow.WorkflowOption) (*Workflow, error) {
+func NewWorkflow(core adapter.Core, logger log.Logger, options workflow.WorkflowOptions) (*Workflow, error) {
 	w := &Workflow{
 		tag:    options.Tag,
 		core:   core,

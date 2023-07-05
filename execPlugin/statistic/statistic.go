@@ -18,7 +18,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var _ adapter.ExecPlugin = (*Statistic)(nil)
+var (
+	_ adapter.ExecPlugin         = (*Statistic)(nil)
+	_ adapter.Starter            = (*Statistic)(nil)
+	_ adapter.WithContext        = (*Statistic)(nil)
+	_ adapter.WithContextLogger  = (*Statistic)(nil)
+	_ adapter.WithExecPluginCore = (*Statistic)(nil)
+	_ adapter.APIHandler         = (*Statistic)(nil)
+)
 
 const PluginType = "statistic"
 
@@ -65,16 +72,12 @@ func (s *Statistic) Start() error {
 	return nil
 }
 
-func (s *Statistic) Close() error {
-	return nil
-}
-
 func (s *Statistic) WithContext(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *Statistic) WithLogger(logger log.ContextLogger) {
-	s.logger = logger
+func (s *Statistic) WithContextLogger(contextLogger log.ContextLogger) {
+	s.logger = contextLogger
 }
 
 func (s *Statistic) WithCore(core adapter.ExecPluginCore) {

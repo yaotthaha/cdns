@@ -3,7 +3,6 @@ package ecs
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/netip"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -13,7 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*ECS)(nil)
+var (
+	_ adapter.ExecPlugin        = (*ECS)(nil)
+	_ adapter.WithContextLogger = (*ECS)(nil)
+)
 
 const PluginType = "ecs"
 
@@ -91,26 +93,8 @@ func (e *ECS) Type() string {
 	return PluginType
 }
 
-func (e *ECS) Start() error {
-	return nil
-}
-
-func (e *ECS) Close() error {
-	return nil
-}
-
-func (e *ECS) WithContext(_ context.Context) {
-}
-
-func (e *ECS) WithLogger(logger log.ContextLogger) {
-	e.logger = logger
-}
-
-func (e *ECS) WithCore(_ adapter.ExecPluginCore) {
-}
-
-func (e *ECS) APIHandler() http.Handler {
-	return nil
+func (e *ECS) WithContextLogger(contextLogger log.ContextLogger) {
+	e.logger = contextLogger
 }
 
 func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {

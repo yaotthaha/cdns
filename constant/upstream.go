@@ -22,9 +22,11 @@ const (
 )
 
 const (
-	TCPDialTimeout = 20 * time.Second
-	TCPIdleTimeout = 2 * time.Minute
-	UDPIdleTimeout = 5 * time.Minute
+	TCPDialTimeout    = 20 * time.Second
+	TCPIdleTimeout    = 2 * time.Minute
+	UDPIdleTimeout    = 5 * time.Minute
+	TCPConnectTimeout = 10 * time.Second
+	UDPConnectTimeout = 10 * time.Second
 )
 
 const DNSQueryTimeout = 10 * time.Second

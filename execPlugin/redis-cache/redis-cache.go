@@ -18,7 +18,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ adapter.ExecPlugin = (*RedisCache)(nil)
+var (
+	_ adapter.ExecPlugin        = (*RedisCache)(nil)
+	_ adapter.Starter           = (*RedisCache)(nil)
+	_ adapter.Closer            = (*RedisCache)(nil)
+	_ adapter.WithContext       = (*RedisCache)(nil)
+	_ adapter.WithContextLogger = (*RedisCache)(nil)
+	_ adapter.APIHandler        = (*RedisCache)(nil)
+)
 
 const PluginType = "redis-cache"
 
@@ -30,7 +37,7 @@ type RedisCache struct {
 	tag         string
 	ctx         context.Context
 	logger      log.ContextLogger
-	address     netip.AddrPort
+	address     string
 	password    string
 	database    int
 	cleanLock   sync.Mutex
@@ -63,7 +70,7 @@ func NewRedisCache(tag string, args map[string]any) (adapter.ExecPlugin, error) 
 	if err != nil {
 		return nil, fmt.Errorf("parse address fail: %s", err)
 	}
-	r.address = address
+	r.address = address.String()
 	r.password = op.Password
 	r.database = op.Database
 
@@ -80,7 +87,7 @@ func (r *RedisCache) Type() string {
 
 func (r *RedisCache) Start() error {
 	c := redis.NewClient(&redis.Options{
-		Addr:         r.address.String(),
+		Addr:         r.address,
 		Password:     r.password,
 		DB:           r.database,
 		DialTimeout:  10 * time.Second,
@@ -108,11 +115,8 @@ func (r *RedisCache) WithContext(ctx context.Context) {
 	r.ctx = ctx
 }
 
-func (r *RedisCache) WithLogger(logger log.ContextLogger) {
-	r.logger = logger
-}
-
-func (r *RedisCache) WithCore(_ adapter.ExecPluginCore) {
+func (r *RedisCache) WithContextLogger(contextLogger log.ContextLogger) {
+	r.logger = contextLogger
 }
 
 func (r *RedisCache) APIHandler() http.Handler {

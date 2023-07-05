@@ -42,22 +42,22 @@ func run() int {
 		return 1
 	}
 	logger := log.NewLogger()
-	if options.LogOption.Disabled {
+	if options.LogOptions.Disabled {
 		logger.SetOutput(io.Discard)
 	}
-	if options.LogOption.Debug {
+	if options.LogOptions.Debug {
 		logger.SetDebug(true)
 	}
-	if options.LogOption.DisableTimestamp {
+	if options.LogOptions.DisableTimestamp {
 		logger.SetFormatFunc(log.DisableTimestampFormatFunc)
 	}
-	if options.LogOption.File != "" {
-		err := os.Remove(options.LogOption.File)
+	if options.LogOptions.File != "" {
+		err := os.Remove(options.LogOptions.File)
 		if err != nil && !os.IsNotExist(err) {
 			log.DefaultSimpleLogger.Fatal(err)
 			return 1
 		}
-		f, err := os.OpenFile(options.LogOption.File, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(options.LogOptions.File, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			log.DefaultSimpleLogger.Fatal(err)
 			return 1

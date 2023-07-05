@@ -1,6 +1,6 @@
 package execPlugin
 
-type ExecPluginOption struct {
+type ExecPluginOptions struct {
 	Tag  string         `yaml:"tag"`
 	Type string         `yaml:"type"`
 	Args map[string]any `yaml:"args"`

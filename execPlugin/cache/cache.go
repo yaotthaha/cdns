@@ -21,7 +21,14 @@ import (
 
 const PluginType = "cache"
 
-var _ adapter.ExecPlugin = (*Cache)(nil)
+var (
+	_ adapter.ExecPlugin        = (*Cache)(nil)
+	_ adapter.Starter           = (*Cache)(nil)
+	_ adapter.Closer            = (*Cache)(nil)
+	_ adapter.WithContext       = (*Cache)(nil)
+	_ adapter.WithContextLogger = (*Cache)(nil)
+	_ adapter.APIHandler        = (*Cache)(nil)
+)
 
 func init() {
 	adapter.RegisterExecPlugin(PluginType, NewCache)
@@ -129,11 +136,8 @@ func (c *Cache) WithContext(ctx context.Context) {
 	c.ctx = ctx
 }
 
-func (c *Cache) WithLogger(contextLogger log.ContextLogger) {
+func (c *Cache) WithContextLogger(contextLogger log.ContextLogger) {
 	c.logger = contextLogger
-}
-
-func (c *Cache) WithCore(_ adapter.ExecPluginCore) {
 }
 
 func (c *Cache) APIHandler() http.Handler {

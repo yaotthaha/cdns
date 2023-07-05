@@ -17,6 +17,16 @@ import (
 	"github.com/go-chi/chi"
 )
 
+type MountMatchPlugin interface {
+	adapter.MatchPlugin
+	adapter.APIHandler
+}
+
+type MountExecPlugin interface {
+	adapter.ExecPlugin
+	adapter.APIHandler
+}
+
 type APIServer struct {
 	ctx            context.Context
 	fatalClose     func(error)
@@ -32,7 +42,7 @@ type APIServer struct {
 	execLock       sync.Mutex
 }
 
-func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOption) (*APIServer, error) {
+func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOptions) (*APIServer, error) {
 	a := &APIServer{
 		ctx:    ctx,
 		logger: log.NewTagLogger(logger, fmt.Sprintf("API Server")),
@@ -108,7 +118,7 @@ func (a *APIServer) Close() error {
 	return nil
 }
 
-func (a *APIServer) MountMatchPlugin(plugin adapter.MatchPlugin) {
+func (a *APIServer) MountMatchPlugin(plugin MountMatchPlugin) {
 	if plugin == nil || a.chiMux == nil {
 		return
 	}
@@ -123,7 +133,7 @@ func (a *APIServer) MountMatchPlugin(plugin adapter.MatchPlugin) {
 	}
 }
 
-func (a *APIServer) MountExecPlugin(plugin adapter.ExecPlugin) {
+func (a *APIServer) MountExecPlugin(plugin MountExecPlugin) {
 	if plugin == nil || a.chiMux == nil {
 		return
 	}

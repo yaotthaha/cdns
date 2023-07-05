@@ -1,5 +1,5 @@
 package upstream
 
-type UpstreamRandomOption struct {
+type UpstreamRandomOptions struct {
 	Upstreams []string `yaml:"upstreams"`
 }

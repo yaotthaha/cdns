@@ -1,4 +1,4 @@
-package upstream
+package dialer
 
 import (
 	"context"
@@ -10,13 +10,10 @@ import (
 
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/option/upstream"
-	"github.com/yaotthaha/cdns/upstream/control"
-	"github.com/yaotthaha/cdns/upstream/socks"
+	"github.com/yaotthaha/cdns/upstream/dialer/control"
 )
 
-type NetDialer interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
-}
+var _ NetDialer = (*simpleDialer)(nil)
 
 type simpleDialer struct {
 	tcp4Dialer *net.Dialer
@@ -25,15 +22,7 @@ type simpleDialer struct {
 	udp6Dialer *net.Dialer
 }
 
-func newNetDialer(options upstream.UpstreamDialerOption) (NetDialer, error) {
-	if options.Socks5Address != nil {
-		return newSocks5Dialer(options)
-	} else {
-		return newSimpleDialer(options)
-	}
-}
-
-func newSimpleDialer(options upstream.UpstreamDialerOption) (*simpleDialer, error) {
+func newSimpleDialer(options upstream.DialerOptions) (*simpleDialer, error) {
 	tcp4Dialer := &net.Dialer{}
 	tcp6Dialer := &net.Dialer{}
 	udp4Dialer := &net.Dialer{}
@@ -156,40 +145,6 @@ func (d *simpleDialer) DialContext(ctx context.Context, network string, address 
 	return nil, fmt.Errorf("unsupported network %s", network)
 }
 
-type socks5Dialer struct {
-	simpleDialer *simpleDialer
-	socks5Dialer *socks.Dialer
-}
-
-func newSocks5Dialer(options upstream.UpstreamDialerOption) (NetDialer, error) {
-	simpleDialer, err := newSimpleDialer(options)
-	if err != nil {
-		return nil, err
-	}
-	socks5Address, err := netip.ParseAddrPort(*options.Socks5Address)
-	if err != nil || !socks5Address.IsValid() {
-		return nil, fmt.Errorf("failed to parse socks5_address %s: %v", *options.Socks5Address, err)
-	}
-	socks5 := socks.NewDialer("tcp", socks5Address.String())
-	socks5.ProxyDial = simpleDialer.DialContext
-	if options.Socks5Username != "" && options.Socks5Password != "" {
-		up := socks.UsernamePassword{
-			Username: options.Socks5Username,
-			Password: options.Socks5Password,
-		}
-		socks5.AuthMethods = []socks.AuthMethod{
-			socks.AuthMethodNotRequired,
-			socks.AuthMethodUsernamePassword,
-		}
-		socks5.Authenticate = up.Authenticate
-	}
-	d := &socks5Dialer{
-		simpleDialer: simpleDialer,
-		socks5Dialer: socks5,
-	}
-	return d, nil
-}
-
-func (d *socks5Dialer) DialContext(ctx context.Context, network string, address string) (net.Conn, error) {
-	return d.socks5Dialer.DialContext(ctx, network, address)
+func (d *simpleDialer) DialParallel(ctx context.Context, network string, addresses []string) (net.Conn, error) {
+	return dialParallel(ctx, d, network, addresses)
 }

@@ -28,7 +28,12 @@ func init() {
 	adapter.RegisterMatchPlugin(PluginType, NewIP)
 }
 
-var _ adapter.MatchPlugin = (*IP)(nil)
+var (
+	_ adapter.MatchPlugin       = (*IP)(nil)
+	_ adapter.Starter           = (*IP)(nil)
+	_ adapter.WithContextLogger = (*IP)(nil)
+	_ adapter.APIHandler        = (*IP)(nil)
+)
 
 type IP struct {
 	tag        string
@@ -143,14 +148,7 @@ func (i *IP) Start() error {
 	return nil
 }
 
-func (i *IP) Close() error {
-	return nil
-}
-
-func (i *IP) WithContext(_ context.Context) {
-}
-
-func (i *IP) WithLogger(contextLogger log.ContextLogger) {
+func (i *IP) WithContextLogger(contextLogger log.ContextLogger) {
 	i.logger = contextLogger
 }
 
