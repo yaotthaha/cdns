@@ -38,20 +38,13 @@ func NewUDPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
-	if options.Listen == "" {
-		options.Listen = ":53"
+	if options.Options == nil {
+		return nil, fmt.Errorf("create udp listener fail: options is empty")
 	}
-	host, port, err := net.SplitHostPort(options.Listen)
+	tcpOptions := options.Options.(*listener.ListenerUDPOptions)
+	listenAddr, err := parseBasicOptions(tcpOptions.Listen, 53)
 	if err != nil {
-		return nil, fmt.Errorf("create udp listener fail: parse listen %s fail: %s", options.Listen, err)
-	}
-	if host == "" {
-		host = "::"
-	}
-	options.Listen = net.JoinHostPort(host, port)
-	listenAddr, err := netip.ParseAddrPort(options.Listen)
-	if err != nil {
-		return nil, fmt.Errorf("create udp listener fail: parse listen %s fail: %s", options.Listen, err)
+		return nil, fmt.Errorf("create udp listener fail: %s", err)
 	}
 	l.listen = listenAddr
 	if options.Workflow == "" {

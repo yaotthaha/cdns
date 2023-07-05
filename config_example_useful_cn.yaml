@@ -9,24 +9,24 @@ api:
 upstreams:
   - tag: google-dns
     type: tls
-    tls:
+    options:
       address: 8.8.4.4
-      server_name: dns.google
-      idle_timeout: 1m
-      query_timeout: 500ms
-    dialer:
-      timeout: 500ms
+      servername: dns.google
+      idle-timeout: 1m
+      query-timeout: 500ms
+      dialer:
+        timeout: 500ms
 
   - tag: ali-dns
     type: tls
-    tls:
+    options:
       address: 223.5.5.5
-      idle_timeout: 1m
-      query_timeout: 200ms
-    dialer:
-      timeout: 200ms
+      idle-timeout: 1m
+      query-timeout: 200ms
+      dialer:
+        timeout: 200ms
 
-match_plugins:
+match-plugins:
   - tag: geosite
     type: sing-geosite
     args:
@@ -35,7 +35,7 @@ match_plugins:
         - private
         - gfw
 
-exec_plugins:
+exec-plugins:
   - tag: cache
     type: cache
 
@@ -89,10 +89,12 @@ workflows:
 listeners:
   - tag: local-udp
     type: udp
-    listen: :1053
+    options:
+      listen: :1053
     workflow: main
 
   - tag: local-tcp
     type: tcp
-    listen: :1053
+    options:
+      listen: :1053
     workflow: main

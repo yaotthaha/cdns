@@ -15,43 +15,55 @@ type UpstreamOptions struct {
 
 type _UpstreamOptions UpstreamOptions
 
-type _initUpstreamOptions struct {
-	Tag  string `yaml:"tag"`
-	Type string `yaml:"type"`
+type GetOptions interface {
+	GetOptions() any
+}
+
+type UpstreamTypeOptions[T any] struct {
+	Tag     string `yaml:"tag"`
+	Type    string `yaml:"type"`
+	Options *T     `yaml:"options"`
+}
+
+func (u *UpstreamTypeOptions[T]) GetOptions() any {
+	return u.Options
 }
 
 func (u *UpstreamOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var initOptions _initUpstreamOptions
-	err := unmarshal(&initOptions)
+	err := unmarshal((*_UpstreamOptions)(u))
 	if err != nil {
 		return err
 	}
-	if initOptions.Tag == "" {
+	if u.Tag == "" {
 		return fmt.Errorf("upstream tag is empty")
 	}
-	var opts any
-	switch initOptions.Type {
+	var opts GetOptions
+	switch u.Type {
 	case constant.UpstreamUDP:
-		opts = &UpstreamUDPOptions{}
+		opts = &UpstreamTypeOptions[UpstreamUDPOptions]{}
 	case constant.UpstreamTCP:
-		opts = &UpstreamTCPOptions{}
+		opts = &UpstreamTypeOptions[UpstreamTCPOptions]{}
 	case constant.UpstreamTLS:
-		opts = &UpstreamTLSOptions{}
+		opts = &UpstreamTypeOptions[UpstreamTLSOptions]{}
 	case constant.UpstreamHTTPS:
-		opts = &UpstreamHTTPSOptions{}
+		opts = &UpstreamTypeOptions[UpstreamHTTPSOptions]{}
 	case constant.UpstreamQUIC:
-		opts = &UpstreamQUICOptions{}
+		opts = &UpstreamTypeOptions[UpstreamQUICOptions]{}
 	case constant.UpstreamMulti:
-		opts = &UpstreamMultiOptions{}
+		opts = &UpstreamTypeOptions[UpstreamMultiOptions]{}
 	case constant.UpstreamRandom:
-		opts = &UpstreamRandomOptions{}
+		opts = &UpstreamTypeOptions[UpstreamRandomOptions]{}
 	case constant.UpstreamQueryTest:
-		opts = &UpstreamQueryTestOptions{}
+		opts = &UpstreamTypeOptions[UpstreamQueryTestOptions]{}
 	default:
-		return fmt.Errorf("upstream type %s is not supported", initOptions.Type)
+		return fmt.Errorf("upstream type %s is not supported", u.Type)
 	}
-	u.Options = opts
-	return unmarshal((*_UpstreamOptions)(u))
+	err = unmarshal(opts)
+	if err != nil {
+		return err
+	}
+	u.Options = opts.GetOptions()
+	return nil
 }
 
 type DialerOptions struct {

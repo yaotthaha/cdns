@@ -26,6 +26,7 @@ type tcpListener struct {
 	logger           log.ContextLogger
 	fatalStartCloser func(error)
 	listen           netip.AddrPort
+	idleTimeout      time.Duration
 	workflow         string
 	tcpListener      net.Listener
 	dnsServer        *dns.Server
@@ -38,26 +39,22 @@ func NewTCPListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
-	if options.Listen == "" {
-		options.Listen = ":53"
+	if options.Options == nil {
+		return nil, fmt.Errorf("create tcp listener fail: options is empty")
 	}
-	host, port, err := net.SplitHostPort(options.Listen)
+	tcpOptions := options.Options.(*listener.ListenerTCPOptions)
+	listenAddr, err := parseBasicOptions(tcpOptions.Listen, 53)
 	if err != nil {
-		return nil, fmt.Errorf("create tcp listener fail: parse listen %s fail: %s", options.Listen, err)
-	}
-	if host == "" {
-		host = "::"
-	}
-	options.Listen = net.JoinHostPort(host, port)
-	listenAddr, err := netip.ParseAddrPort(options.Listen)
-	if err != nil {
-		return nil, fmt.Errorf("create tcp listener fail: parse listen %s fail: %s", options.Listen, err)
+		return nil, fmt.Errorf("create tcp listener fail: %s", err)
 	}
 	l.listen = listenAddr
 	if options.Workflow == "" {
 		return nil, fmt.Errorf("create tcp listener fail: workflow is empty")
 	}
 	l.workflow = options.Workflow
+	if tcpOptions.IdleTimeout > 0 {
+		l.idleTimeout = time.Duration(tcpOptions.IdleTimeout)
+	}
 	return l, nil
 }
 
@@ -88,6 +85,13 @@ func (l *tcpListener) Start() error {
 		Handler:      l,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
+		IdleTimeout: func() time.Duration {
+			if l.idleTimeout > 0 {
+				return l.idleTimeout
+			} else {
+				return 8 * time.Second
+			}
+		},
 	}
 	waitLock := sync.Mutex{}
 	waitLock.Lock()

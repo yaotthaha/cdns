@@ -3,11 +3,9 @@ package listener
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
 	"sync"
 	"time"
 
@@ -31,6 +29,7 @@ type tlsListener struct {
 	listen           netip.AddrPort
 	workflow         string
 	tlsConfig        *tls.Config
+	idleTimeout      time.Duration
 	tlsListener      net.Listener
 	dnsServer        *dns.Server
 }
@@ -42,52 +41,28 @@ func NewTLSListener(ctx context.Context, core adapter.Core, logger log.Logger, o
 		core:   core,
 		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
 	}
-	if options.Listen == "" {
-		options.Listen = ":853"
+	if options.Options == nil {
+		return nil, fmt.Errorf("create tls listener fail: options is empty")
 	}
-	host, port, err := net.SplitHostPort(options.Listen)
+	tlsOptions := options.Options.(*listener.ListenerTLSOptions)
+	listenAddr, err := parseBasicOptions(tlsOptions.Listen, 853)
 	if err != nil {
-		return nil, fmt.Errorf("create tls listener fail: parse listen %s fail: %s", options.Listen, err)
-	}
-	if host == "" {
-		host = "::"
-	}
-	options.Listen = net.JoinHostPort(host, port)
-	listenAddr, err := netip.ParseAddrPort(options.Listen)
-	if err != nil {
-		return nil, fmt.Errorf("create tls listener fail: parse listen %s fail: %s", options.Listen, err)
+		return nil, fmt.Errorf("create tls listener fail: %s", err)
 	}
 	l.listen = listenAddr
-	if options.TLSOptions.CertFile == "" && options.TLSOptions.KeyFile == "" {
-		return nil, fmt.Errorf("create tls listener fail: cert_file and key_file is empty")
-	} else if options.TLSOptions.CertFile != "" && options.TLSOptions.KeyFile == "" {
-		return nil, fmt.Errorf("create tls listener fail: key_file is empty")
-	} else if options.TLSOptions.CertFile == "" && options.TLSOptions.KeyFile != "" {
-		return nil, fmt.Errorf("create tls listener fail: cert_file is empty")
-	} else {
-		keyPair, err := tls.LoadX509KeyPair(options.TLSOptions.CertFile, options.TLSOptions.KeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("create tls listener fail: load key pair fail: %s", err)
-		}
-		tlsConfig := &tls.Config{}
-		tlsConfig.Certificates = []tls.Certificate{keyPair}
-		if options.TLSOptions.ClientCAFile != "" {
-			caContent, err := os.ReadFile(options.TLSOptions.ClientCAFile)
-			if err != nil {
-				return nil, fmt.Errorf("create tls listener fail: load ca cert fail: %s", err)
-			}
-			tlsConfig.ClientCAs = &x509.CertPool{}
-			if !tlsConfig.ClientCAs.AppendCertsFromPEM(caContent) {
-				return nil, fmt.Errorf("create tls listener fail: append ca cert fail")
-			}
-			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		}
-		l.tlsConfig = tlsConfig
+	tlsConfig := &tls.Config{}
+	err = parseTLSOptions(tlsConfig, tlsOptions.TLSOption)
+	if err != nil {
+		return nil, fmt.Errorf("create tls listener fail: %s", err)
 	}
+	l.tlsConfig = tlsConfig
 	if options.Workflow == "" {
 		return nil, fmt.Errorf("create tls listener fail: workflow is empty")
 	}
 	l.workflow = options.Workflow
+	if tlsOptions.IdleTimeout > 0 {
+		l.idleTimeout = time.Duration(tlsOptions.IdleTimeout)
+	}
 	return l, nil
 }
 
@@ -118,6 +93,12 @@ func (l *tlsListener) Start() error {
 		Handler:      l,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
+		IdleTimeout: func() time.Duration {
+			if l.idleTimeout > 0 {
+				return l.idleTimeout
+			}
+			return 8 * time.Second
+		},
 	}
 	waitLock := sync.Mutex{}
 	waitLock.Lock()

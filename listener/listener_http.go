@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"os"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -63,41 +61,51 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.Logger, 
 	l.dnsMsgPool.New(func() *dns.Msg {
 		return new(dns.Msg)
 	})
-	if options.HTTPOptions.Path != "" {
-		l.path = options.HTTPOptions.Path
+	if options.Options == nil {
+		return nil, fmt.Errorf("listener options is required")
+	}
+	httpOptions := options.Options.(*listener.ListenHTTPOptions)
+	if httpOptions.Path != "" {
+		l.path = httpOptions.Path
 	} else {
 		l.path = "/dns-query"
 	}
-	if !options.HTTPOptions.UseH3 {
-		if options.HTTPOptions.TLSOptions != nil {
-			err := l.parseTLSOptions(nil, *options.HTTPOptions.TLSOptions)
+	if !httpOptions.EnableH3 {
+		if httpOptions.TLSOptions != nil {
+			tlsConfig := &tls.Config{}
+			err := parseTLSOptions(tlsConfig, *httpOptions.TLSOptions)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create http listener fail: %s", err)
 			}
+			l.tlsConfig = tlsConfig
 			l.tlsConfig.NextProtos = []string{http2.NextProtoTLS, "http/1.1"}
-			err = l.parseBasicOptions(options, "443")
+			listenAddr, err := parseBasicOptions(httpOptions.Listen, 443)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create http listener fail: %s", err)
 			}
+			l.listen = listenAddr
 		} else {
-			err := l.parseBasicOptions(options, "80")
+			listenAddr, err := parseBasicOptions(httpOptions.Listen, 80)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create http listener fail: %s", err)
 			}
+			l.listen = listenAddr
 		}
 	} else {
-		err := l.parseBasicOptions(options, "443")
+		listenAddr, err := parseBasicOptions(httpOptions.Listen, 80)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create http listener fail: %s", err)
 		}
-		if options.HTTPOptions.TLSOptions == nil {
-			return nil, fmt.Errorf("tls options is required when use protocol 3")
+		l.listen = listenAddr
+		if httpOptions.TLSOptions == nil {
+			return nil, fmt.Errorf("create http listener fail: tls options is required when use protocol 3")
 		}
 		tlsConfig := http3.ConfigureTLSConfig(&tls.Config{})
-		err = l.parseTLSOptions(tlsConfig, *options.HTTPOptions.TLSOptions)
+		err = parseTLSOptions(tlsConfig, *httpOptions.TLSOptions)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create http listener fail: %s", err)
 		}
+		l.tlsConfig = tlsConfig
 		l.tlsConfig.NextProtos = []string{"h3"}
 		l.quicConfig = &quic.Config{
 			MaxIdleTimeout:        5 * time.Minute,
@@ -106,12 +114,12 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.Logger, 
 			Allow0RTT:             true,
 		}
 	}
-	if options.HTTPOptions.ReadIPHeader != nil && len(options.HTTPOptions.ReadIPHeader) > 0 {
-		l.realIPHeader = options.HTTPOptions.ReadIPHeader
+	if httpOptions.ReadIPHeader != nil && len(httpOptions.ReadIPHeader) > 0 {
+		l.realIPHeader = httpOptions.ReadIPHeader
 	}
-	if options.HTTPOptions.TrustIP != nil && len(options.HTTPOptions.TrustIP) > 0 {
+	if httpOptions.TrustIP != nil && len(httpOptions.TrustIP) > 0 {
 		ips := make([]any, 0)
-		for _, addr := range options.HTTPOptions.TrustIP {
+		for _, addr := range httpOptions.TrustIP {
 			ip, err := netip.ParseAddr(addr)
 			if err == nil {
 				ips = append(ips, ip)
@@ -122,7 +130,7 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.Logger, 
 				ips = append(ips, cidr)
 				continue
 			}
-			return nil, fmt.Errorf("create http listener fail: invalid trust_ip: %s", addr)
+			return nil, fmt.Errorf("create http listener fail: invalid trust-ip: %s", addr)
 		}
 		l.trustIP = ips
 	}
@@ -131,57 +139,6 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.Logger, 
 	}
 	l.workflow = options.Workflow
 	return l, nil
-}
-
-func (l *httpListener) parseBasicOptions(options listener.ListenerOptions, defaultPort string) error {
-	if options.Listen == "" {
-		options.Listen = fmt.Sprintf(":%s", defaultPort)
-	}
-	host, port, err := net.SplitHostPort(options.Listen)
-	if err != nil {
-		return fmt.Errorf("create http listener fail: parse listen %s fail: %s", options.Listen, err)
-	}
-	if host == "" {
-		host = "::"
-	}
-	options.Listen = net.JoinHostPort(host, port)
-	listenAddr, err := netip.ParseAddrPort(options.Listen)
-	if err != nil {
-		return fmt.Errorf("create http listener fail: parse listen %s fail: %s", options.Listen, err)
-	}
-	l.listen = listenAddr
-	return nil
-}
-
-func (l *httpListener) parseTLSOptions(tlsConfig *tls.Config, options listener.ListenHTTPTLSOptions) error {
-	if options.CertFile == "" && options.KeyFile == "" {
-		return fmt.Errorf("create http listener fail: cert_file and key_file is empty")
-	} else if options.CertFile != "" && options.KeyFile == "" {
-		return fmt.Errorf("create http listener fail: key_file is empty")
-	} else if options.CertFile == "" && options.KeyFile != "" {
-		return fmt.Errorf("create http listener fail: cert_file is empty")
-	}
-	keyPair, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
-	if err != nil {
-		return fmt.Errorf("create http listener fail: load key pair fail: %s", err)
-	}
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{}
-	}
-	tlsConfig.Certificates = []tls.Certificate{keyPair}
-	if options.ClientCAFile != "" {
-		caContent, err := os.ReadFile(options.ClientCAFile)
-		if err != nil {
-			return fmt.Errorf("create http listener fail: load ca cert fail: %s", err)
-		}
-		tlsConfig.ClientCAs = &x509.CertPool{}
-		if !tlsConfig.ClientCAs.AppendCertsFromPEM(caContent) {
-			return fmt.Errorf("create http listener fail: append ca cert fail")
-		}
-		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-	l.tlsConfig = tlsConfig
-	return nil
 }
 
 func (l *httpListener) Tag() string {
