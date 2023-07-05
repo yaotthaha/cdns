@@ -37,7 +37,10 @@ match-plugins:
 
 exec-plugins:
   - tag: cache
-    type: cache
+    type: redis-cache
+    args:
+      address: /var/run/redis/redis.sock
+      database: 6
 
 workflows:
   - tag: main

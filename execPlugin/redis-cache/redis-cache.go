@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"os"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ type RedisCache struct {
 	ctx         context.Context
 	logger      log.ContextLogger
 	address     string
+	isUnix      bool
 	password    string
 	database    int
 	cleanLock   sync.Mutex
@@ -67,10 +69,12 @@ func NewRedisCache(tag string, args map[string]any) (adapter.ExecPlugin, error) 
 		return nil, fmt.Errorf("address must be not empty")
 	}
 	address, err := netip.ParseAddrPort(op.Address)
-	if err != nil {
-		return nil, fmt.Errorf("parse address fail: %s", err)
+	if err == nil {
+		r.address = address.String()
+	} else {
+		r.address = op.Address
+		r.isUnix = true
 	}
-	r.address = address.String()
 	r.password = op.Password
 	r.database = op.Database
 
@@ -86,15 +90,29 @@ func (r *RedisCache) Type() string {
 }
 
 func (r *RedisCache) Start() error {
-	c := redis.NewClient(&redis.Options{
-		Addr:         r.address,
-		Password:     r.password,
+	if r.isUnix {
+		_, err := os.Stat(r.address)
+		if err != nil {
+			return fmt.Errorf("unix socket error: %s", err)
+		}
+	}
+	opts := &redis.Options{
+		Addr:     r.address,
+		Password: r.password,
+		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
+			r.logger.Debug(fmt.Sprintf("connect to redis"))
+			return nil
+		},
 		DB:           r.database,
 		DialTimeout:  10 * time.Second,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		PoolSize:     4,
-	})
+	}
+	if r.isUnix {
+		opts.Network = "unix"
+	}
+	c := redis.NewClient(opts)
 	_, err := c.Ping(r.ctx).Result()
 	if err != nil {
 		return fmt.Errorf("ping redis fail: %s", err)
