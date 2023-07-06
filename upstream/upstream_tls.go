@@ -159,7 +159,7 @@ func (u *tlsUpstream) Start() error {
 		}
 		u.logger.Debug("open new connection")
 		tlsConn := tls.Client(conn, u.tlsConfig.Clone())
-		err = tlsConn.Handshake()
+		err = tlsConn.HandshakeContext(ctx)
 		if err != nil {
 			return nil, err
 		}

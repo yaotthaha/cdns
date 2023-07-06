@@ -66,8 +66,11 @@ func dialParallel(ctx context.Context, dialer NetDialer, network string, address
 		return conn.conn, nil
 	}
 	err := saveErr.Load()
-	if err != nil {
+	if err == nil {
 		err = ctx.Err()
+	}
+	if err == nil {
+		err = fmt.Errorf("unknown error")
 	}
 	return nil, err
 }
