@@ -22,6 +22,7 @@ type Core struct {
 	logger           log.Logger
 	apiServer        *APIServer
 	upstreams        map[string]adapter.Upstream
+	upstreamArr      []adapter.Upstream
 	workflows        map[string]adapter.Workflow
 	matchPlugins     map[string]adapter.MatchPlugin
 	execPlugins      map[string]adapter.ExecPlugin
@@ -49,6 +50,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		return nil, fmt.Errorf("no upstreams found")
 	}
 	core.upstreams = make(map[string]adapter.Upstream)
+	core.upstreamArr = make([]adapter.Upstream, 0)
 	for _, u := range options.UpstreamOptions {
 		if u.Tag == "" {
 			return nil, fmt.Errorf("init upstream fail: tag is empty")
@@ -64,7 +66,13 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			wc.WithCore(core)
 		}
 		core.upstreams[u.Tag] = up
+		core.upstreamArr = append(core.upstreamArr, up)
 	}
+	upstreams, err := sortUpstreams(core.upstreamArr)
+	if err != nil {
+		return nil, err
+	}
+	core.upstreamArr = upstreams
 	// Init Match Plugins
 	if options.MatchPluginOptions != nil && len(options.MatchPluginOptions) > 0 {
 		core.matchPlugins = make(map[string]adapter.MatchPlugin)
@@ -168,7 +176,7 @@ func (c *Core) Run() error {
 	defer c.logger.Info("core close")
 	startFatalCtx, startFatalCancel := context.WithCancelCause(c.ctx)
 	if c.upstreams != nil {
-		for _, u := range c.upstreams {
+		for _, u := range c.upstreamArr {
 			if fatalStarter, ok := u.(adapter.FatalStarter); ok {
 				fatalStarter.WithFatalCloser(startFatalCancel)
 			}
@@ -181,7 +189,8 @@ func (c *Core) Run() error {
 			}
 		}
 		defer func() {
-			for _, u := range c.upstreams {
+			for i := range c.upstreamArr {
+				u := c.upstreamArr[len(c.upstreamArr)-1-i]
 				if closer, isCloser := u.(adapter.Closer); isCloser {
 					err := closer.Close()
 					if err != nil {
@@ -288,11 +297,7 @@ func (c *Core) GetUpstream(tag string) adapter.Upstream {
 }
 
 func (c *Core) ListUpstream() []adapter.Upstream {
-	var upstreams []adapter.Upstream
-	for _, u := range c.upstreams {
-		upstreams = append(upstreams, u)
-	}
-	return upstreams
+	return c.upstreamArr
 }
 
 func (c *Core) GetWorkflow(tag string) adapter.Workflow {

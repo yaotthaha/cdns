@@ -37,7 +37,11 @@ const (
 	testDomain   = "www.example.com"
 )
 
-var _ adapter.Upstream = (*queryTestUpstream)(nil)
+var (
+	_ adapter.Upstream = (*queryTestUpstream)(nil)
+	_ adapter.Starter  = (*queryTestUpstream)(nil)
+	_ adapter.WithCore = (*queryTestUpstream)(nil)
+)
 
 func NewQueryTestUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	f := &queryTestUpstream{
@@ -76,6 +80,10 @@ func (u *queryTestUpstream) Tag() string {
 
 func (u *queryTestUpstream) Type() string {
 	return constant.UpstreamQueryTest
+}
+
+func (u *queryTestUpstream) Dependencies() []string {
+	return u.upstreamTags
 }
 
 func (u *queryTestUpstream) WithCore(core adapter.Core) {

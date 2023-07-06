@@ -27,7 +27,11 @@ type multiUpstream struct {
 	upstreamTags []string
 }
 
-var _ adapter.Upstream = (*multiUpstream)(nil)
+var (
+	_ adapter.Upstream = (*multiUpstream)(nil)
+	_ adapter.Starter  = (*multiUpstream)(nil)
+	_ adapter.WithCore = (*multiUpstream)(nil)
+)
 
 func NewMultiUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &multiUpstream{
@@ -59,6 +63,10 @@ func (u *multiUpstream) Type() string {
 
 func (u *multiUpstream) WithCore(core adapter.Core) {
 	u.core = core
+}
+
+func (u *multiUpstream) Dependencies() []string {
+	return u.upstreamTags
 }
 
 func (u *multiUpstream) Start() error {

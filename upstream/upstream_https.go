@@ -46,7 +46,11 @@ type httpsUpstream struct {
 	header     http.Header
 }
 
-var _ adapter.Upstream = (*httpsUpstream)(nil)
+var (
+	_ adapter.Upstream = (*httpsUpstream)(nil)
+	_ adapter.Starter  = (*httpsUpstream)(nil)
+	_ adapter.WithCore = (*httpsUpstream)(nil)
+)
 
 func NewHTTPSUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &httpsUpstream{
@@ -214,6 +218,23 @@ func (u *httpsUpstream) WithCore(core adapter.Core) {
 	if u.bootstrap != nil {
 		u.bootstrap.WithCore(core)
 	}
+}
+
+func (u *httpsUpstream) Dependencies() []string {
+	if u.bootstrap != nil {
+		return []string{u.bootstrap.UpstreamTag()}
+	}
+	return nil
+}
+
+func (u *httpsUpstream) Start() error {
+	if u.bootstrap != nil {
+		err := u.bootstrap.Start()
+		if err != nil {
+			return fmt.Errorf("start https upstream fail: start bootstrap fail: %s", err)
+		}
+	}
+	return nil
 }
 
 func (u *httpsUpstream) ContextLogger() log.ContextLogger {

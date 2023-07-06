@@ -13,4 +13,5 @@ type Upstream interface {
 	Tag() string
 	ContextLogger() log.ContextLogger
 	Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error)
+	Dependencies() []string
 }

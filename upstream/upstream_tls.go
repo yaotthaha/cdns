@@ -39,7 +39,12 @@ type tlsUpstream struct {
 	connPool  *connpool.ConnPool
 }
 
-var _ adapter.Upstream = (*tlsUpstream)(nil)
+var (
+	_ adapter.Upstream = (*tlsUpstream)(nil)
+	_ adapter.Starter  = (*tlsUpstream)(nil)
+	_ adapter.Closer   = (*tlsUpstream)(nil)
+	_ adapter.WithCore = (*tlsUpstream)(nil)
+)
 
 func NewTLSUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &tlsUpstream{
@@ -117,7 +122,20 @@ func (u *tlsUpstream) WithCore(core adapter.Core) {
 	}
 }
 
+func (u *tlsUpstream) Dependencies() []string {
+	if u.bootstrap != nil {
+		return []string{u.bootstrap.UpstreamTag()}
+	}
+	return nil
+}
+
 func (u *tlsUpstream) Start() error {
+	if u.bootstrap != nil {
+		err := u.bootstrap.Start()
+		if err != nil {
+			return fmt.Errorf("start tls upstream fail: start bootstrap fail: %s", err)
+		}
+	}
 	connPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
 		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
 		defer cancel()

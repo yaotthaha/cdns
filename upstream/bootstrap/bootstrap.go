@@ -60,6 +60,14 @@ func (b *Bootstrap) WithCore(core Core) {
 	b.core = core
 }
 
+func (b *Bootstrap) UpstreamTag() string {
+	return b.upstreamTag
+}
+
+func (b *Bootstrap) Upstream() adapter.Upstream {
+	return b.upstream
+}
+
 func (b *Bootstrap) Start() error {
 	up := b.core.GetUpstream(b.upstreamTag)
 	if up == nil {
@@ -105,13 +113,13 @@ func (b *Bootstrap) query0(ctx context.Context, dnsMsg *dns.Msg) (*result, error
 
 func (b *Bootstrap) queryA(ctx context.Context, domain string) (*result, error) {
 	dnsMsg := &dns.Msg{}
-	dnsMsg.SetQuestion(domain, dns.TypeA)
+	dnsMsg.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 	return b.query0(ctx, dnsMsg)
 }
 
 func (b *Bootstrap) queryAAAA(ctx context.Context, domain string) (*result, error) {
 	dnsMsg := &dns.Msg{}
-	dnsMsg.SetQuestion(domain, dns.TypeAAAA)
+	dnsMsg.SetQuestion(dns.Fqdn(domain), dns.TypeAAAA)
 	return b.query0(ctx, dnsMsg)
 }
 

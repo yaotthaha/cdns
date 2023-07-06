@@ -24,7 +24,11 @@ type randomUpstream struct {
 	upstreamTags []string
 }
 
-var _ adapter.Upstream = (*randomUpstream)(nil)
+var (
+	_ adapter.Upstream = (*randomUpstream)(nil)
+	_ adapter.Starter  = (*randomUpstream)(nil)
+	_ adapter.WithCore = (*randomUpstream)(nil)
+)
 
 func NewRandomUpstream(rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &randomUpstream{
@@ -55,6 +59,10 @@ func (u *randomUpstream) Type() string {
 
 func (u *randomUpstream) WithCore(core adapter.Core) {
 	u.core = core
+}
+
+func (u *randomUpstream) Dependencies() []string {
+	return u.upstreamTags
 }
 
 func (u *randomUpstream) Start() error {

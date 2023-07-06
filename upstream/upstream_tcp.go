@@ -37,7 +37,12 @@ type tcpUpstream struct {
 	connPool *connpool.ConnPool
 }
 
-var _ adapter.Upstream = (*tcpUpstream)(nil)
+var (
+	_ adapter.Upstream = (*tcpUpstream)(nil)
+	_ adapter.Starter  = (*tcpUpstream)(nil)
+	_ adapter.Closer   = (*tcpUpstream)(nil)
+	_ adapter.WithCore = (*tcpUpstream)(nil)
+)
 
 func NewTCPUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &tcpUpstream{
@@ -104,7 +109,20 @@ func (u *tcpUpstream) WithCore(core adapter.Core) {
 	}
 }
 
+func (u *tcpUpstream) Dependencies() []string {
+	if u.bootstrap != nil {
+		return []string{u.bootstrap.UpstreamTag()}
+	}
+	return nil
+}
+
 func (u *tcpUpstream) Start() error {
+	if u.bootstrap != nil {
+		err := u.bootstrap.Start()
+		if err != nil {
+			return fmt.Errorf("start tcp upstream fail: start bootstrap fail: %s", err)
+		}
+	}
 	connPool := connpool.New(constant.MaxConn, u.idleTimeout, func() (net.Conn, error) {
 		ctx, cancel := context.WithTimeout(u.ctx, u.connectTimeout)
 		defer cancel()

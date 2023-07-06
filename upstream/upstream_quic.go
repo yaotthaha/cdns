@@ -42,7 +42,10 @@ type quicUpstream struct {
 	quicConnLock sync.Mutex
 }
 
-var _ adapter.Upstream = (*quicUpstream)(nil)
+var (
+	_ adapter.Upstream = (*quicUpstream)(nil)
+	_ adapter.Starter  = (*quicUpstream)(nil)
+)
 
 func NewQUICUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &quicUpstream{
@@ -125,7 +128,20 @@ func (u *quicUpstream) Type() string {
 	return constant.UpstreamQUIC
 }
 
+func (u *quicUpstream) Dependencies() []string {
+	if u.bootstrap != nil {
+		return []string{u.bootstrap.UpstreamTag()}
+	}
+	return nil
+}
+
 func (u *quicUpstream) Start() error {
+	if u.bootstrap != nil {
+		err := u.bootstrap.Start()
+		if err != nil {
+			return fmt.Errorf("start quic upstream fail: start bootstrap fail: %s", err)
+		}
+	}
 	go u.watch()
 	return nil
 }
