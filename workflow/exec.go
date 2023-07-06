@@ -21,6 +21,7 @@ type execItem struct {
 	plugin   *execPlugin
 	jumpTo   []string
 	goTo     *string
+	setTTL   *uint32
 	clean    *bool
 	reTurn   any
 }
@@ -72,6 +73,11 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 
 	if options.GoTo != nil {
 		eItem.goTo = options.GoTo
+		rn++
+	}
+
+	if options.SetTTL != nil {
+		eItem.setTTL = options.SetTTL
 		rn++
 	}
 
@@ -138,10 +144,17 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		w.Exec(ctx, dnsCtx)
 		return false
 	}
+	if e.setTTL != nil {
+		if *e.setTTL > 0 && dnsCtx.RespMsg != nil {
+			for _, answer := range dnsCtx.RespMsg.Answer {
+				answer.Header().Ttl = uint32(*e.setTTL)
+			}
+		}
+	}
 	if e.clean != nil {
 		if *e.clean {
 			dnsCtx.RespMsg = nil
-			logger.DebugContext(ctx, "clean resp_msg")
+			logger.DebugContext(ctx, "clean resp-msg")
 		}
 	}
 	if e.reTurn != nil {
