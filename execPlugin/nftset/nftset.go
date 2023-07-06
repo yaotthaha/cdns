@@ -42,12 +42,12 @@ type NftSet struct {
 }
 
 type option struct {
-	TableName4 string             `yaml:"table_name4"`
-	SetName4   string             `yaml:"set_name4"`
+	TableName4 string             `yaml:"table-name4"`
+	SetName4   string             `yaml:"set-name4"`
 	Mask4      uint8              `yaml:"mask4"`
 	TTL4       types.TimeDuration `yaml:"ttl4"`
-	TableName6 string             `yaml:"table_name6"`
-	SetName6   string             `yaml:"set_name6"`
+	TableName6 string             `yaml:"table-name6"`
+	SetName6   string             `yaml:"set-name6"`
 	Mask6      uint8              `yaml:"mask6"`
 	TTL6       types.TimeDuration `yaml:"ttl6"`
 }

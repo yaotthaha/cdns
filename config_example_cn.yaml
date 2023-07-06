@@ -18,106 +18,91 @@ api:
 
 # upstream 模块：上游DNS服务器配置
 # 支持多种类型：UDP、TCP、TLS、HTTPS(HTTP/3)、QUIC
-upstream:
-  - tag: Google-UDP-DNS
-    type: udp
-    udp: # UDP 上游服务器配置
-      address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port
-      idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
-      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
-    dialer: # 拨号器配置
-      timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
-      so_mark: 0 # SO_MARK，仅支持 Linux
-      bind_interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
-      bind_ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
-
+upstreams:
   - tag: Google-TCP-DNS
     type: tcp
-    tcp: # UDP 上游服务器配置
-      address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port
-      idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
-      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
-    dialer: # 拨号器配置
-      timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
-      so_mark: 0 # SO_MARK，仅支持 Linux
-      bind_interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
-      bind_ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
-      # Socks5 代理只支持 TCP/TLS/HTTPS(不支持HTTP/3) 类型
-      socks5_address: 127.0.0.1:2080 # Socks5 代理地址，格式：IP:Port，端口不可省略！！！
-      socks5_username: username # Socks5 代理用户名，可为空
-      socks5_password: password # Socks5 代理密码，可为空
+    options: # UDP 上游服务器配置
+      address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port | Domain | Domain:Port
+      connect-timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
+      idle-timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
+      query-timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
+      bootstrap: # 若 address 为域名，可配置上游服务器用于解析
+        upstream: Basic-DNS # 上游服务器标签，必填
+        strategy: ipv4-only # 解析策略，可选：ipv4-only、ipv6-only、ipv4-prefer(默认)、ipv6-prefer
+      dialer: # 拨号器配置
+        timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
+        so-mark: 0 # SO_MARK，仅支持 Linux
+        bind-interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
+        bind-ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
+        # Socks5 代理只支持 TCP/TLS/HTTPS(不支持HTTP/3) 类型
+        socks5:
+          address: 127.0.0.1:2080 # Socks5 代理地址，格式：IP:Port，端口不可省略！！！
+          username: username # Socks5 代理用户名，可为空
+          password: password # Socks5 代理密码，可为空
+
+  - tag: Google-UDP-DNS
+    type: udp
+    options: # UDP 上游服务器配置
+      address: 8.8.8.8:53 # 上游服务器地址，必填，格式：IP | IP:Port | Domain | Domain:Port
+      connect-timeout: # 同上
+      idle-timeout: # 同上
+      query-timeout: # 同上
+      dialer: # 同上
+      bootstrap: # 同上
 
   - tag: Google-TLS-DNS
     type: tls
-    tls: # TLS 上游服务器配置
-      address: 8.8.8.8:853 # 上游服务器地址，必填，格式：IP | IP:Port
-      server_name: dns.google # TLS SNI
-      insecure_skip_verify: false # 是否跳过证书校验
-      idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
-      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
-      # 以下为不常用设置，可以忽略
-      ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
-      client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
-      client_key_file: /etc/cdns/client_key.pem # 客户端私钥文件路径，用于客户端认证
-    dialer: # 拨号器配置
-      timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
-      so_mark: 0 # SO_MARK，仅支持 Linux
-      bind_interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
-      bind_ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
-      # Socks5 代理只支持 TCP/TLS/HTTPS(不支持HTTP/3) 类型
-      socks5_address: 127.0.0.1:2080 # Socks5 代理地址，格式：IP:Port，端口不可省略！！！
-      socks5_username: username # Socks5 代理用户名，可为空
-      socks5_password: password # Socks5 代理密码，可为空
+    options: # TLS 上游服务器配置
+      address: 8.8.8.8:853 # 上游服务器地址，必填，格式：IP | IP:Port | Domain | Domain:Port
+      connect-timeout: # 同上
+      idle-timeout: # 同上
+      query-timeout: # 同上
+      tls: # TLS 配置
+        servername: dns.google # TLS SNI
+        insecure-skip-verify: false # 是否跳过证书校验
+        # 以下为不常用设置，可以忽略
+        ca-file: # CA 证书文件路径，用于校验服务器证书
+          - /etc/cdns/server_ca.pem
+        client-cert-file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
+        client-key-file: /etc/cdns/client_key.pem # 客户端私钥文件路径，用于客户端认证
+      dialer: # 同上
+      bootstrap: # 同上
 
   - tag: Cloudflare-HTTPS-DNS
     type: https
-    https: # HTTPS 上游服务器配置
+    options: # HTTPS 上游服务器配置
       address: 1.1.1.1:443 # 上游服务器地址，必填，格式：IP | IP:Port
-      url: https://dns.cloudflare-dns.com/dns-query # HTTPS URL
+      path: /dns-query # HTTPS Path
       header: # HTTP Header
         Host: dns.cloudflare-dns.com
-        User-Agent: cdns/v0.0.1-alpha
-      use_h3: false # 使用 HTTP/3
-      server_name: dns.cloudflare-dns.com # TLS SNI
-      insecure_skip_verify: false # 是否跳过证书校验
-      idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
-      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
-      # 以下为不常用设置，可以忽略
-      ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
-      client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
-      client_key_file: /etc/cdns/client_key.pem # 客户端私钥文件路径，用于客户端认证
-    dialer: # 拨号器配置
-      timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
-      so_mark: 0 # SO_MARK，仅支持 Linux
-      bind_interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
-      bind_ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
-      # Socks5 代理只支持 TCP/TLS/HTTPS(不支持HTTP/3) 类型
-      socks5_address: 127.0.0.1:2080 # Socks5 代理地址，格式：IP:Port，端口不可省略！！！
-      socks5_username: username # Socks5 代理用户名，可为空
-      socks5_password: password # Socks5 代理密码，可为空
+        User-Agent: cdns/unknown
+      enable-h3: false # 使用 HTTP/3
+      tls: # 同上
+      dialer: # 同上
+      bootstrap: # 同上
 
   - tag: AdGuard-QUIC-DNS
     type: quic
-    quic: # QUIC 上游服务器配置
+    options: # QUIC 上游服务器配置
       address: 94.140.14.14:784 # 上游服务器地址，必填，格式：IP | IP:Port
-      server_name: dns.adguard-dns.com # TLS SNI
-      insecure_skip_verify: false # 是否跳过证书校验
-      idle_timeout: 10s # 连接空闲超时时间，格式：Golang time.Duration 格式
-      query_timeout: 800ms # 查询超时时间，格式：Golang time.Duration 格式
-      # 以下为不常用设置，可以忽略
-      ca_file: /etc/cdns/server_ca.pem # CA 证书文件路径，用于校验服务器证书
-      client_cert_file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
-      client_key_file: /etc/cdns/client_key.pem # 客户端私钥文件路径，用于客户端认证
-    dialer: # 拨号器配置
-      timeout: 10s # 连接超时时间，格式：Golang time.Duration 格式
-      so_mark: 0 # SO_MARK，仅支持 Linux
-      bind_interface: eth0 # 绑定网卡，仅支持 Linux/Darwin/Windows
-      bind_ip: 192.168.1.1 # 绑定 IP，仅支持 Linux/Darwin/Windows
+      connect-timeout: # 同上
+      idle-timeout: # 同上
+      query-timeout: # 同上
+      tls: # TLS 配置
+        servername: dns.adguard-dns.com # TLS SNI
+        insecure-skip-verify: false # 是否跳过证书校验
+        # 以下为不常用设置，可以忽略
+        ca-file: # CA 证书文件路径，用于校验服务器证书
+          - /etc/cdns/server_ca.pem
+        client-cert-file: /etc/cdns/client_cert.pem # 客户端证书文件路径，用于客户端认证
+        client-key-file: /etc/cdns/client_key.pem # 客户端私钥文件路径，用于客户端认证
+      dialer: # 同上
+      bootstrap: # 同上
 
   # 并发查询，取最快返回的结果（并非最快的请求IP）
   - tag: Multi-DNS
     type: multi
-    multi:
+    options:
       upstreams:
         - tag: Google-TLS-DNS
         - tag: Cloudflare-HTTPS-DNS
@@ -126,7 +111,7 @@ upstream:
   # 随机选取上游服务器查询
   - tag: Random-DNS
     type: random
-    random:
+    options:
       upstreams:
         - tag: Google-TLS-DNS
         - tag: Cloudflare-HTTPS-DNS
@@ -135,18 +120,18 @@ upstream:
   # 根据请求测试选取上游服务器查询
   - tag: QueryTest-DNS
     type: querytest
-    querytest:
+    options:
       upstreams:
         - tag: Google-TLS-DNS
         - tag: Cloudflare-HTTPS-DNS
         - tag: AdGuard-QUIC-DNS
-      test_interval: 10s # 测试间隔时间，格式：Golang time.Duration 格式
-      test_domain: www.example.com # 测试域名
+      test-interval: 10s # 测试间隔时间，格式：Golang time.Duration 格式
+      test-domain: www.example.com # 测试域名
       fallback: false # 是否开启回退模式，开启后，当所有上游服务器都不可用时，会使用第一个上游服务器进行查询
 
 # match-plugin 模块：匹配插件
 # 用户可以自定义编写自己的匹配插件，只需实现 adapter.MatchPlugin 接口，并注册，然后在 matchPlugin/plugin.go 中匿名引入即可
-match_plugins:
+match-plugins:
   # 域名匹配插件
   - tag: domain
     type: domain
@@ -220,7 +205,7 @@ match_plugins:
 
 
 # exec-plugin 模块：执行插件
-exec_plugins:
+exec-plugins:
   # 缓存插件，提供缓存功能，可以有效减少上游服务器的请求次数，提高查询性能
   - tag: cache
     type: cache
@@ -232,7 +217,7 @@ exec_plugins:
   - tag: redis-cache
     type: redis-cache
     args:
-      address: 127.0.0.1:6379 # Redis 地址
+      address: 127.0.0.1:6379 # Redis 地址，支持 Unix Socket
       database: 6 # Redis 数据库（默认为空）
       password: # Redis 密码（若有）
     #############
@@ -281,12 +266,12 @@ exec_plugins:
   - tag: nftset
     type: nftset
     args:
-      table_name4: table4 # NftSet table 名称
-      set_name4: set4 # NftSet set 名称
+      table-name4: table4 # NftSet table 名称
+      set-name4: set4 # NftSet set 名称
       mask4: 32 # 默认 32，使用更大的子网
       ttl4: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
-      table_name6: table4 # NftSet table 名称
-      set_name6: set4 # NftSet set 名称
+      table-name6: table4 # NftSet table 名称
+      set-name6: set4 # NftSet set 名称
       mask6: 128 # 默认 128，使用更大的子网
       ttl6: 10s # 自定义 TTL，不使用 DNS 返回的默认 TTL
 
@@ -295,13 +280,13 @@ workflows:
   - tag: main
     rules:
       # 用户可以自定义工作流程，对 DNS 请求进行精细化处理
-      # 工作量支持三种匹配类型 match_or/match_and/exec
+      # 工作量支持三种匹配类型 match-or/match-and/exec
 
-      - match_and: # 匹配规则，所有规则匹配成功才会执行 exec 规则，若存在 else_exec，则匹配不成功时执行 else_exec，数据类型：数组，每一项一种匹配规则
+      - match-and: # 匹配规则，所有规则匹配成功才会执行 exec 规则，若存在 else-exec，则匹配不成功时执行 else-exec，数据类型：数组，每一项一种匹配规则
           - listener: # 匹配监听器 tag
               - listener-1
               - listener-2
-          - client_ip: # 匹配请求的客户端 IP
+          - client-ip: # 匹配请求的客户端 IP
               - 192.168.0.2
               - 192.168.1.0/24
           - qtype: # 匹配请求类型(QType)
@@ -310,9 +295,9 @@ workflows:
           - qname: # 匹配请求的QName
               - www.google.com.
               - www.example.com.
-          - has_resp_msg: true # 匹配是否有响应消息
-          - has_resp_msg: false # 匹配是否没有响应消息
-          - resp_ip: # 如果有响应消息，匹配响应消息中的IP，仅支持 A/AAAA
+          - has-resp-msg: true # 匹配是否有响应消息
+          - has-resp-msg: false # 匹配是否没有响应消息
+          - resp-ip: # 如果有响应消息，匹配响应消息中的IP，仅支持 A/AAAA
               - 100.64.0.1
               - 192.168.0.0/24
             invert: true # 是否对规则取反，注意放置的位置，只能放置在每一项匹配规则里
@@ -321,9 +306,9 @@ workflows:
               tag: domain # 匹配插件 tag
               args: # 传递的参数
                 Foo: Bar
-          - match_and: # 嵌套匹配规则，所有规则匹配成功才会执行 exec 规则，数据类型：数组，每一项一种匹配规则
-          - match_or: # 嵌套匹配规则，只要有一项规则匹配成功就会执行 exec 规则，数据类型：数组，每一项一种匹配规则
-        else_exec: # 若存在 else_exec，则匹配不成功时执行 else_exec
+          - match-and: # 嵌套匹配规则，所有规则匹配成功才会执行 exec 规则，数据类型：数组，每一项一种匹配规则
+          - match-or: # 嵌套匹配规则，只要有一项规则匹配成功就会执行 exec 规则，数据类型：数组，每一项一种匹配规则
+        else-exec: # 若存在 else-exec，则匹配不成功时执行 else-exec
           # do something...
         exec:
           - mark: 1 # 设置标记，格式：正整数
@@ -332,20 +317,24 @@ workflows:
               tag: cache # 执行插件 tag
               args: # 传递的参数
                 Foo: Bar
-          - jump_to: # 跳转到指定的工作流程，数据类型：字符串，值为 workflow tag
+          - jump-to: # 跳转到指定的工作流程，数据类型：字符串，值为 workflow tag
               - w1
               - w2
-          - go_to: # 跳转到指定的工作流程，数据类型：字符串，值为 workflow tag
+          - go-to: # 跳转到指定的工作流程，数据类型：字符串，值为 workflow tag
               - w1
               - w2
+          - set-ttl: 86400 # 修改应答的 TTL，单位：秒
           - clean: true # 清除返回的 DNS 响应数据，数据类型：布尔值，true 为清除，false 为不清除
-          ### jump_to 和 go_to 的区别 ###
-          # jump_to：跳转到指定的工作流程，执行完后返回当前工作流程继续执行，除非触发(return)直接结束整个流程
-          # go_to：跳转到指定的工作流程，执行完后不会返回当前工作流程，而是直接结束
+          ### jump-to 和 go-to 的区别 ###
+          # jump-to：跳转到指定的工作流程，执行完后返回当前工作流程继续执行，除非触发(return)直接结束整个流程
+          # go-to：跳转到指定的工作流程，执行完后不会返回当前工作流程，而是直接结束
           - return: true # 触发 return，直接结束整个工作流程，数据类型：任意，只要有值就会触发
+          # - return: SUCCESS # 生成 Rcode 为 0 的空应答
+          # - return: FAIL # 生成 Rcode 为 2 (SERVFAIL: 服务器失败)应答
+          # - return: NXDOMAIN # 生成 Rcode 为 3 (NXDOMAIN: 域名不存在)应答
 
       # match-plugin 详解
-      - match_or:
+      - match-or:
           - plugin: # 使用 match-plugin domain
               tag: domain # 匹配插件 tag
               args: # 传递的参数
@@ -362,7 +351,7 @@ workflows:
               args:
                 code: # 设置匹配的 code，数据结构：数组|字符串
                   - cn
-        else_exec: # 若存在 else_exec，则匹配不成功时执行 else_exec
+        else-exec: # 若存在 else-exec，则匹配不成功时执行 else-exec
           # do something...
         exec:
 
@@ -386,7 +375,7 @@ workflows:
                 workflows: # 并发执行的工作流，取最快返回的工作流的结果
                   - w1
                   - w2
-                wait_time: 100ms # 当 workflows 数为 2 时，配置生效，第二个 workflow 将被延迟 wait_time 执行
+                wait-time: 100ms # 当 workflows 数为 2 时，配置生效，第二个 workflow 将被延迟 wait-time 执行
 
           - plugin: # 使用 exec-plugin host
               tag: host # 执行插件 tag
@@ -412,19 +401,23 @@ workflows:
 listeners:
   - tag: local-tcp
     type: tcp # 监听器类型，目前支持 tcp/udp
-    listen: :53 # 监听地址，格式：IP:Port | :Port
+    options:
+      listen: :53 # 监听地址，格式：IP:Port | :Port
+      idle-timeout: 5s # 连接空闲超时时间，单位：秒
     workflow: main # 触发的工作流程，数据类型：字符串，值为 workflow tag
 
   - tag: local-udp
     type: udp # 监听器类型，目前支持 tcp/udp
-    listen: :53 # 监听地址，格式：IP:Port | :Port
+    options:
+      listen: :53 # 监听地址，格式：IP:Port | :Port
     workflow: main # 触发的工作流程，数据类型：字符串，值为 workflow tag
 
   - tag: tls
     type: tls
-    listen: :853
+    options:
+      listen: :853 # 监听地址，格式：IP:Port | :Port
+      tls:
+        cert-file: /etc/cdns/server_cert.pem # 证书文件
+        key-file: /etc/cdns/server_key.pem # 私钥文件
+        client-ca-file: /etc/cdns/client_ca.pem # 客户端 CA 文件，用于强制验证客户端证书，可选，不填则不验证
     workflow: main
-    tls:
-      cert_file: /etc/cdns/server_cert.pem # 证书文件
-      key_file: /etc/cdns/server_key.pem # 私钥文件
-      client_ca_file: /etc/cdns/client_ca.pem # 客户端 CA 文件，用于强制验证客户端证书，可选，不填则不验证

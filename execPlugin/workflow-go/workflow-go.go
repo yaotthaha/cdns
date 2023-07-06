@@ -87,13 +87,13 @@ func (w *WorkflowGo) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 			return false
 		}
 		if len(workflowTags) == 2 {
-			waitTimeAny, ok := args["wait_time"]
+			waitTimeAny, ok := args["wait-time"]
 			if ok {
 				waitTimeStr, ok := waitTimeAny.(string)
 				if ok {
 					wt, err := time.ParseDuration(waitTimeStr)
 					if err != nil {
-						w.logger.ErrorContext(ctx, fmt.Sprintf("parse wait_time fail: %s", err))
+						w.logger.ErrorContext(ctx, fmt.Sprintf("parse wait-time fail: %s", err))
 						return false
 					}
 					waitTime = wt
