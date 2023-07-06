@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 type Logger interface {
@@ -41,4 +43,12 @@ type ContextLogger interface {
 	DebugContext(context.Context, ...any)
 	FatalContext(context.Context, ...any)
 	PrintContext(context.Context, Level, ...any)
+}
+
+type ColorLogger interface {
+	EnableColor() bool
+}
+
+type SetColorLogger interface {
+	SetColor(color.Attribute)
 }

@@ -51,6 +51,9 @@ func run() int {
 	if options.LogOptions.DisableTimestamp {
 		logger.SetFormatFunc(log.DisableTimestampFormatFunc)
 	}
+	if options.LogOptions.EnableColorOutput {
+		logger.SetColor(true)
+	}
 	if options.LogOptions.File != "" {
 		err := os.Remove(options.LogOptions.File)
 		if err != nil && !os.IsNotExist(err) {

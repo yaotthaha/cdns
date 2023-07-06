@@ -33,11 +33,11 @@ var (
 	_ adapter.WithCore = (*multiUpstream)(nil)
 )
 
-func NewMultiUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewMultiUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &multiUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create multi upstream fail: options is empty")

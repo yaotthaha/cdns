@@ -3,6 +3,7 @@ module github.com/yaotthaha/cdns
 go 1.20
 
 require (
+	github.com/fatih/color v1.15.0
 	github.com/go-chi/chi v1.5.4
 	github.com/google/nftables v0.1.0
 	github.com/gorilla/websocket v1.5.0
@@ -30,6 +31,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/native v0.0.0-20200817173448-b6b71def0850 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mdlayher/netlink v1.4.2 // indirect
 	github.com/mdlayher/socket v0.0.0-20211102153432-57e3fa563ecb // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect

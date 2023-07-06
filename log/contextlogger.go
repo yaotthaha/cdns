@@ -6,12 +6,15 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/lib/tools"
+
+	"github.com/fatih/color"
 )
 
 type contextTag struct{}
 
 type contextMsg struct {
 	tag   string
+	color color.Attribute
 	start time.Time
 }
 
@@ -20,7 +23,12 @@ type contextLogger struct {
 }
 
 func AddContextTag(ctx context.Context) context.Context {
-	return context.WithValue(ctx, (*contextTag)(nil), &contextMsg{tag: tools.RandomNumStr(8), start: time.Now()})
+	cmg := &contextMsg{
+		tag:   tools.RandomNumStr(8),
+		color: RandomColor(),
+		start: time.Now(),
+	}
+	return context.WithValue(ctx, (*contextTag)(nil), cmg)
 }
 
 func GetContextTag(ctx context.Context) string {
@@ -38,6 +46,14 @@ func NewContextLogger(rootLogger Logger) ContextLogger {
 	return c
 }
 
+func (c *contextLogger) EnableColor() bool {
+	if cl, ok := c.Logger.(ColorLogger); ok {
+		return cl.EnableColor()
+	} else {
+		return false
+	}
+}
+
 func (c *contextLogger) PrintContext(ctx context.Context, level Level, a ...any) {
 	v := ctx.Value((*contextTag)(nil))
 	if v == nil {
@@ -46,7 +62,11 @@ func (c *contextLogger) PrintContext(ctx context.Context, level Level, a ...any)
 	}
 	value := v.(*contextMsg)
 	an := make([]any, 0)
-	an = append(an, fmt.Sprintf("[%s %dms] ", value.tag, time.Since(value.start).Milliseconds()))
+	if c.EnableColor() {
+		an = append(an, fmt.Sprintf("[%s] ", GetColor(value.color).Sprintf("%s %dms", value.tag, time.Since(value.start).Milliseconds())))
+	} else {
+		an = append(an, fmt.Sprintf("[%s %dms] ", value.tag, time.Since(value.start).Milliseconds()))
+	}
 	an = append(an, a...)
 	c.Print(level, an...)
 }

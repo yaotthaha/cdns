@@ -43,11 +43,11 @@ var (
 	_ adapter.WithCore = (*queryTestUpstream)(nil)
 )
 
-func NewQueryTestUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewQueryTestUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	f := &queryTestUpstream{
 		ctx:    ctx,
-		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
 		tag:    options.Tag,
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create querytest upstream fail: options is empty")

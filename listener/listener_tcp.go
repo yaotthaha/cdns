@@ -32,12 +32,12 @@ type tcpListener struct {
 	dnsServer        *dns.Server
 }
 
-func NewTCPListener(ctx context.Context, core adapter.Core, logger log.Logger, options listener.ListenerOptions) (adapter.Listener, error) {
+func NewTCPListener(ctx context.Context, core adapter.Core, logger log.ContextLogger, options listener.ListenerOptions) (adapter.Listener, error) {
 	l := &tcpListener{
 		tag:    options.Tag,
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create tcp listener fail: options is empty")

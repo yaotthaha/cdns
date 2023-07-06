@@ -16,11 +16,11 @@ type Workflow struct {
 	rules  []*Rule
 }
 
-func NewWorkflow(core adapter.Core, logger log.Logger, options workflow.WorkflowOptions) (*Workflow, error) {
+func NewWorkflow(core adapter.Core, logger log.ContextLogger, options workflow.WorkflowOptions) (*Workflow, error) {
 	w := &Workflow{
 		tag:    options.Tag,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("workflow/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Rules == nil || len(options.Rules) == 0 {
 		return nil, fmt.Errorf("workflow has no rules")

@@ -30,10 +30,10 @@ var (
 	_ adapter.WithCore = (*randomUpstream)(nil)
 )
 
-func NewRandomUpstream(rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewRandomUpstream(logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &randomUpstream{
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create random upstream fail: options is empty")

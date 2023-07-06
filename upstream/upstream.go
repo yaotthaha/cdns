@@ -20,7 +20,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func NewUpstream(ctx context.Context, logger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	switch options.Type {
 	case constant.UpstreamUDP:
 		return NewUDPUpstream(ctx, logger, options)

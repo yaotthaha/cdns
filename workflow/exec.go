@@ -147,7 +147,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 	if e.setTTL != nil {
 		if *e.setTTL > 0 && dnsCtx.RespMsg != nil {
 			for _, answer := range dnsCtx.RespMsg.Answer {
-				answer.Header().Ttl = uint32(*e.setTTL)
+				answer.Header().Ttl = *e.setTTL
 			}
 		}
 	}

@@ -46,11 +46,11 @@ var (
 	_ adapter.WithCore = (*tlsUpstream)(nil)
 )
 
-func NewTLSUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewTLSUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &tlsUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create tls upstream fail: options is empty")

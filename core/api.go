@@ -14,6 +14,7 @@ import (
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option"
 
+	"github.com/fatih/color"
 	"github.com/go-chi/chi"
 )
 
@@ -45,7 +46,10 @@ type APIServer struct {
 func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOptions) (*APIServer, error) {
 	a := &APIServer{
 		ctx:    ctx,
-		logger: log.NewTagLogger(logger, fmt.Sprintf("API Server")),
+		logger: log.NewTagLogger(logger, fmt.Sprintf("api server")),
+	}
+	if clogger, isSetColorLogger := a.logger.(log.SetColorLogger); isSetColorLogger {
+		clogger.SetColor(color.FgYellow)
 	}
 	if options.Listen == "" {
 		return a, nil

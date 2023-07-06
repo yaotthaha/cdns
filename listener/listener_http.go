@@ -51,12 +51,12 @@ type httpListener struct {
 	dnsMsgPool       types.SyncPool[*dns.Msg]
 }
 
-func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.Logger, options listener.ListenerOptions) (adapter.Listener, error) {
+func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.ContextLogger, options listener.ListenerOptions) (adapter.Listener, error) {
 	l := &httpListener{
 		tag:    options.Tag,
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("listener/%s", options.Tag))),
+		logger: logger,
 	}
 	l.dnsMsgPool.New(func() *dns.Msg {
 		return new(dns.Msg)

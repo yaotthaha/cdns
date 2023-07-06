@@ -3,21 +3,48 @@ package log
 import (
 	"context"
 	"fmt"
+
+	"github.com/fatih/color"
 )
 
 type tagLogger struct {
-	tag string
+	tag   string
+	color color.Attribute
 	Logger
 }
 
 func NewTagLogger(rootLogger Logger, tag string) Logger {
-	return &tagLogger{
+	t := &tagLogger{
 		tag:    tag,
 		Logger: rootLogger,
+	}
+	if t.EnableColor() {
+		t.color = RandomColor()
+	} else {
+		t.color = -1
+	}
+	return t
+}
+
+func (t *tagLogger) EnableColor() bool {
+	if cl, ok := t.Logger.(ColorLogger); ok {
+		return cl.EnableColor()
+	} else {
+		return false
+	}
+}
+
+func (t *tagLogger) SetColor(color color.Attribute) {
+	if t.color >= 0 {
+		t.color = color
 	}
 }
 
 func (t *tagLogger) Print(level Level, a ...any) {
+	if t.color >= 0 {
+		t.Logger.Print(level, fmt.Sprintf("[%s] %s", GetColor(t.color).Sprint(t.tag), fmt.Sprint(a...)))
+		return
+	}
 	t.Logger.Print(level, fmt.Sprintf("[%s] %s", t.tag, fmt.Sprint(a...)))
 }
 

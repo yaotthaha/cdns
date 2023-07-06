@@ -13,6 +13,8 @@ import (
 	"github.com/yaotthaha/cdns/option"
 	"github.com/yaotthaha/cdns/upstream"
 	"github.com/yaotthaha/cdns/workflow"
+
+	"github.com/fatih/color"
 )
 
 type Core struct {
@@ -39,6 +41,9 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		ctx:    ctx,
 		logger: log.NewTagLogger(logger, "core"),
 	}
+	if clogger, isSetColorLogger := core.logger.(log.SetColorLogger); isSetColorLogger {
+		clogger.SetColor(color.FgYellow)
+	}
 	// Init API Server
 	apiServer, err := NewAPIServer(ctx, logger, options.APIOptions)
 	if err != nil {
@@ -58,6 +63,11 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		if _, ok := core.upstreams[u.Tag]; ok {
 			return nil, fmt.Errorf("init upstream fail: tag %s duplicated", u.Tag)
 		}
+		tagLogger := log.NewTagLogger(core.logger, fmt.Sprintf("upstream/%s", u.Tag))
+		if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
+			clogger.SetColor(color.FgCyan)
+		}
+		logger := log.NewContextLogger(tagLogger)
 		up, err := upstream.NewUpstream(ctx, logger, u)
 		if err != nil {
 			return nil, fmt.Errorf("init upstream fail: %s", err)
@@ -91,7 +101,11 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 				wc.WithContext(ctx)
 			}
 			if wl, ok := mp.(adapter.WithContextLogger); ok {
-				wl.WithContextLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s", mp.Tag()))))
+				tagLogger := log.NewTagLogger(logger, fmt.Sprintf("match-plugin/%s", mp.Tag()))
+				if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
+					clogger.SetColor(color.FgBlue)
+				}
+				wl.WithContextLogger(log.NewContextLogger(tagLogger))
 			}
 			if wc, ok := mp.(adapter.WithMatchPluginCore); ok {
 				wc.WithCore(core)
@@ -120,7 +134,11 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 				wc.WithContext(ctx)
 			}
 			if wl, ok := ep.(adapter.WithContextLogger); ok {
-				wl.WithContextLogger(log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s", ep.Tag()))))
+				tagLogger := log.NewTagLogger(logger, fmt.Sprintf("exec-plugin/%s", ep.Tag()))
+				if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
+					clogger.SetColor(color.FgBlue)
+				}
+				wl.WithContextLogger(log.NewContextLogger(tagLogger))
 			}
 			if wc, ok := ep.(adapter.WithExecPluginCore); ok {
 				wc.WithCore(core)
@@ -143,6 +161,11 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		if _, ok := core.workflows[w.Tag]; ok {
 			return nil, fmt.Errorf("init workflow fail: tag %s duplicated", w.Tag)
 		}
+		tagLogger := log.NewTagLogger(logger, fmt.Sprintf("workflow/%s", w.Tag))
+		if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
+			clogger.SetColor(color.FgCyan)
+		}
+		logger := log.NewContextLogger(tagLogger)
 		wf, err := workflow.NewWorkflow(core, logger, w)
 		if err != nil {
 			return nil, fmt.Errorf("init workflow %s fail: %s", w.Tag, err)
@@ -161,6 +184,11 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		if _, ok := core.listeners[l.Tag]; ok {
 			return nil, fmt.Errorf("init listener fail: tag %s duplicated", l.Tag)
 		}
+		tagLogger := log.NewTagLogger(logger, fmt.Sprintf("listener/%s", l.Tag))
+		if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
+			clogger.SetColor(color.FgBlue)
+		}
+		logger := log.NewContextLogger(tagLogger)
 		ler, err := listener.NewListener(ctx, core, logger, l)
 		if err != nil {
 			return nil, fmt.Errorf("init listener %s fail: %s", l.Tag, err)

@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 var DefaultSimpleLogger Logger
@@ -18,6 +20,7 @@ type SimpleLogger struct {
 	output     io.Writer
 	formatFunc func(level, s string) string
 	debug      bool
+	color      bool
 }
 
 func NewLogger() *SimpleLogger {
@@ -46,8 +49,31 @@ func (s *SimpleLogger) SetDebug(debug bool) {
 	s.debug = debug
 }
 
+func (s *SimpleLogger) SetColor(color bool) {
+	s.color = color
+}
+
+func (s *SimpleLogger) EnableColor() bool {
+	return s.color
+}
+
 func (s *SimpleLogger) print(level, str string) {
 	str = strings.TrimSpace(str)
+	if s.color {
+		switch level {
+		case string(Info):
+			level = GetColor(color.FgGreen).Sprint(level)
+		case string(Warn):
+			level = GetColor(color.FgYellow).Sprint(level)
+		case string(Error):
+			level = GetColor(color.FgRed).Sprint(level)
+		case string(Debug):
+			level = GetColor(color.FgBlue).Sprint(level)
+		case string(Fatal):
+			level = GetColor(color.FgRed).Sprint(level)
+		default:
+		}
+	}
 	fmt.Fprintln(s.output, s.formatFunc(level, str))
 }
 

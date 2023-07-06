@@ -20,7 +20,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func NewListener(ctx context.Context, core adapter.Core, logger log.Logger, options listener.ListenerOptions) (adapter.Listener, error) {
+func NewListener(ctx context.Context, core adapter.Core, logger log.ContextLogger, options listener.ListenerOptions) (adapter.Listener, error) {
 	switch options.Type {
 	case constant.ListenerUDP:
 		return NewUDPListener(ctx, core, logger, options)

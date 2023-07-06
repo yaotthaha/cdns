@@ -45,11 +45,11 @@ var (
 	_ adapter.WithCore = (*udpUpstream)(nil)
 )
 
-func NewUDPUpstream(ctx context.Context, rootLogger log.Logger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
+func NewUDPUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
 	u := &udpUpstream{
 		ctx:    ctx,
 		tag:    options.Tag,
-		logger: log.NewContextLogger(log.NewTagLogger(rootLogger, fmt.Sprintf("upstream/%s", options.Tag))),
+		logger: logger,
 	}
 	if options.Options == nil {
 		return nil, fmt.Errorf("create udp upstream fail: options is empty")

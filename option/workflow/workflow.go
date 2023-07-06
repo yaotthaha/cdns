@@ -33,9 +33,9 @@ func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 			)
 			for k := range v {
 				switch {
-				case k == "match_or":
+				case k == "match-or":
 					haveMatchOr = true
-				case k == "match_and":
+				case k == "match-and":
 					haveMatchAnd = true
 				case k == "exec":
 					haveExec = true

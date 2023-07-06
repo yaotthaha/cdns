@@ -32,7 +32,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 		for _, mItem := range options.MatchOr {
 			m, err := newMatchItem(core, mItem)
 			if err != nil {
-				return nil, fmt.Errorf("init matcher_or rule fail, module: match_or: %s", err)
+				return nil, fmt.Errorf("init matcher-or rule fail, module: match_or: %s", err)
 			}
 			matchers = append(matchers, m)
 		}
@@ -43,7 +43,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			for _, eItem := range options.ElseExec {
 				e, err := newExecItem(core, eItem)
 				if err != nil {
-					return nil, fmt.Errorf("init matcher_or rule fail, module: else_exec: %s", err)
+					return nil, fmt.Errorf("init matcher-or rule fail, module: else_exec: %s", err)
 				}
 				execs = append(execs, e)
 			}
@@ -55,7 +55,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			for _, eItem := range options.Exec {
 				e, err := newExecItem(core, eItem)
 				if err != nil {
-					return nil, fmt.Errorf("init matcher_or rule fail, module: exec: %s", err)
+					return nil, fmt.Errorf("init matcher-or rule fail, module: exec: %s", err)
 				}
 				execs = append(execs, e)
 			}
@@ -63,7 +63,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			ee = true
 		}
 		if !ee {
-			return nil, fmt.Errorf("init matcher_or rule fail, module: no exec or else_exec")
+			return nil, fmt.Errorf("init matcher-or rule fail, module: no exec or else_exec")
 		}
 		r.mode = modeOr
 	case *workflow.RuleMatchAnd:
@@ -71,7 +71,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 		for _, mItem := range options.MatchAnd {
 			m, err := newMatchItem(core, mItem)
 			if err != nil {
-				return nil, fmt.Errorf("init matcher_and rule fail, module: match_and: %s", err)
+				return nil, fmt.Errorf("init matcher-and rule fail, module: match_and: %s", err)
 			}
 			matchers = append(matchers, m)
 		}
@@ -82,7 +82,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			for _, eItem := range options.ElseExec {
 				e, err := newExecItem(core, eItem)
 				if err != nil {
-					return nil, fmt.Errorf("init matcher_and rule fail, module: else_exec: %s", err)
+					return nil, fmt.Errorf("init matcher-and rule fail, module: else_exec: %s", err)
 				}
 				execs = append(execs, e)
 			}
@@ -94,7 +94,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			for _, eItem := range options.Exec {
 				e, err := newExecItem(core, eItem)
 				if err != nil {
-					return nil, fmt.Errorf("init matcher_and rule fail, module: exec: %s", err)
+					return nil, fmt.Errorf("init matcher-and rule fail, module: exec: %s", err)
 				}
 				execs = append(execs, e)
 			}
@@ -102,7 +102,7 @@ func newRule(core adapter.Core, options any) (*Rule, error) {
 			ee = true
 		}
 		if !ee {
-			return nil, fmt.Errorf("init matcher_and rule fail, module: no exec or else_exec")
+			return nil, fmt.Errorf("init matcher-and rule fail, module: no exec or else_exec")
 		}
 		r.mode = modeAnd
 	case *workflow.RuleExec:
