@@ -156,8 +156,8 @@ func (l *httpListener) Start() error {
 	}
 	chiRouter := chi.NewRouter()
 	chiRouter.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, []byte("404"))
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, []byte("404"))
 	})
 	chiRouter.Get(l.path, l.httpHandler)
 	chiRouter.Post(l.path, l.httpHandler)
