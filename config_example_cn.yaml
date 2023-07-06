@@ -5,7 +5,8 @@ log:
   disabled: false # 禁用日志输出
   file: /tmp/cdns.log # 日志文件路径
   debug: false # 是否开启 Debug 日志输出
-  disable_timestamp: false # 是否禁用时间输出
+  disable-timestamp: false # 是否禁用时间输出
+  enable-color-output: false # 是否开启颜色输出
 
 # api 模块：API 配置
 api:
