@@ -183,6 +183,16 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 				dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 				logger.DebugContext(ctx, "return fail")
 				done = true
+			case "NXDOMAIN":
+				dnsCtx.RespMsg = &dns.Msg{}
+				dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeNameError)
+				var name string
+				if len(dnsCtx.ReqMsg.Question) > 1 {
+					name = dnsCtx.ReqMsg.Question[0].Name
+				}
+				dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
+				logger.DebugContext(ctx, "return nxdomain")
+				done = true
 			case "REJECT":
 				dnsCtx.RespMsg = &dns.Msg{}
 				dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeRefused)
