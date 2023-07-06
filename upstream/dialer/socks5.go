@@ -24,7 +24,7 @@ func newSocks5Dialer(options upstream.DialerOptions) (NetDialer, error) {
 	}
 	socks5Address, err := netip.ParseAddrPort(options.Socks5.Address)
 	if err != nil || !socks5Address.IsValid() {
-		return nil, fmt.Errorf("failed to parse socks5_address %s: %v", options.Socks5.Address, err)
+		return nil, fmt.Errorf("failed to parse socks5 address %s: %v", options.Socks5.Address, err)
 	}
 	socks5 := socks.NewDialer("tcp", socks5Address.String())
 	socks5.ProxyDial = simpleDialer.DialContext

@@ -85,7 +85,7 @@ func newSimpleDialer(options upstream.DialerOptions) (*simpleDialer, error) {
 	if options.BindIP != "" {
 		bindIP, err := netip.ParseAddr(options.BindIP)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse bind_ip %s: %v", options.BindIP, err)
+			return nil, fmt.Errorf("failed to parse bind-ip %s: %v", options.BindIP, err)
 		}
 		tcp4Dialer.LocalAddr = &net.TCPAddr{
 			IP: bindIP.AsSlice(),

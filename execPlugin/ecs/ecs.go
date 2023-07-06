@@ -125,7 +125,7 @@ func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 			es.Address = dnsCtx.ClientIP.AsSlice()
 			o.Option = append(o.Option, es)
 			reqMsg.Extra = append(reqMsg.Extra, o)
-			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client_ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 32))
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client-ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 32))
 		}
 	}
 	if reqMsg.Question[0].Qtype == dns.TypeAAAA {
@@ -154,7 +154,7 @@ func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 			es.Address = dnsCtx.ClientIP.AsSlice()
 			o.Option = append(o.Option, es)
 			reqMsg.Extra = append(reqMsg.Extra, o)
-			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client_ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 128))
+			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client-ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 128))
 		}
 	}
 	return true

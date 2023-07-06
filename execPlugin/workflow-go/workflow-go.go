@@ -172,7 +172,7 @@ func (w *WorkflowGo) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		close(respChan)
 	}()
 	if respDNSCtx != nil {
-		w.logger.DebugContext(ctx, fmt.Sprintf("has resp_msg, use id [%s]", respDNSCtx.id))
+		w.logger.DebugContext(ctx, fmt.Sprintf("has resp-msg, use id [%s]", respDNSCtx.id))
 		respDNSCtx.dnsCtx.SaveTo(dnsCtx)
 	}
 	return true

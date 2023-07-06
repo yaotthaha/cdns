@@ -48,8 +48,8 @@ type Cache struct {
 
 type option struct {
 	Size         uint64             `yaml:"size"`
-	DumpFile     string             `yaml:"dump_file"`
-	DumpInterval types.TimeDuration `yaml:"dump_interval"`
+	DumpFile     string             `yaml:"dump-file"`
+	DumpInterval types.TimeDuration `yaml:"dump-interval"`
 }
 
 func NewCache(tag string, args map[string]any) (adapter.ExecPlugin, error) {
