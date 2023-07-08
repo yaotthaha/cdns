@@ -1,4 +1,4 @@
-package workflow_go
+package concurrent_workflow
 
 import (
 	"context"
@@ -10,50 +10,50 @@ import (
 	"github.com/yaotthaha/cdns/log"
 )
 
-const PluginType = "workflow-go"
+const PluginType = "concurrent-workflow"
 
 var (
-	_ adapter.ExecPlugin         = (*WorkflowGo)(nil)
-	_ adapter.WithContext        = (*WorkflowGo)(nil)
-	_ adapter.WithContextLogger  = (*WorkflowGo)(nil)
-	_ adapter.WithExecPluginCore = (*WorkflowGo)(nil)
+	_ adapter.ExecPlugin         = (*ConcurrentWorkflow)(nil)
+	_ adapter.WithContext        = (*ConcurrentWorkflow)(nil)
+	_ adapter.WithContextLogger  = (*ConcurrentWorkflow)(nil)
+	_ adapter.WithExecPluginCore = (*ConcurrentWorkflow)(nil)
 )
 
 func init() {
-	adapter.RegisterExecPlugin(PluginType, NewWorkflowGo)
+	adapter.RegisterExecPlugin(PluginType, NewConcurrentWorkflow)
 }
 
-type WorkflowGo struct {
+type ConcurrentWorkflow struct {
 	tag    string
 	ctx    context.Context
 	logger log.ContextLogger
 	core   adapter.ExecPluginCore
 }
 
-func NewWorkflowGo(tag string, args map[string]any) (adapter.ExecPlugin, error) {
-	w := &WorkflowGo{
+func NewConcurrentWorkflow(tag string, _ map[string]any) (adapter.ExecPlugin, error) {
+	w := &ConcurrentWorkflow{
 		tag: tag,
 	}
 	return w, nil
 }
 
-func (w *WorkflowGo) Tag() string {
+func (w *ConcurrentWorkflow) Tag() string {
 	return w.tag
 }
 
-func (w *WorkflowGo) Type() string {
+func (w *ConcurrentWorkflow) Type() string {
 	return PluginType
 }
 
-func (w *WorkflowGo) WithContext(ctx context.Context) {
+func (w *ConcurrentWorkflow) WithContext(ctx context.Context) {
 	w.ctx = ctx
 }
 
-func (w *WorkflowGo) WithContextLogger(contextLogger log.ContextLogger) {
+func (w *ConcurrentWorkflow) WithContextLogger(contextLogger log.ContextLogger) {
 	w.logger = contextLogger
 }
 
-func (w *WorkflowGo) WithCore(core adapter.ExecPluginCore) {
+func (w *ConcurrentWorkflow) WithCore(core adapter.ExecPluginCore) {
 	w.core = core
 }
 
@@ -62,7 +62,7 @@ type respMsg struct {
 	dnsCtx *adapter.DNSContext
 }
 
-func (w *WorkflowGo) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
 	var (
 		workflowTags []string
 		waitTime     time.Duration
@@ -113,8 +113,8 @@ func (w *WorkflowGo) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		}
 		workflows = append(workflows, workflow)
 	}
-	w.logger.DebugContext(ctx, "workflow-go start")
-	defer w.logger.DebugContext(ctx, "workflow-go end")
+	w.logger.DebugContext(ctx, "concurrent-workflow start")
+	defer w.logger.DebugContext(ctx, "concurrent-workflow end")
 	respChan := make(chan *respMsg, 1)
 	var respDNSCtx *respMsg
 	runCtx, runCancel := context.WithCancel(ctx)
@@ -125,12 +125,12 @@ func (w *WorkflowGo) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		go func(runCtx context.Context, workflow adapter.Workflow, dnsCtx *adapter.DNSContext, index int) {
 			defer wg.Done()
 			if index == 1 && waitTime > 0 {
-				w.logger.DebugContext(ctx, fmt.Sprintf("workflow-go wait time start, wait %s", waitTime.String()))
+				w.logger.DebugContext(ctx, fmt.Sprintf("concurrent-workflow wait time start, wait %s", waitTime.String()))
 				select {
 				case <-runCtx.Done():
 					return
 				case <-time.After(waitTime):
-					w.logger.DebugContext(ctx, "workflow-go wait time end")
+					w.logger.DebugContext(ctx, "concurrent-workflow wait time end")
 				}
 			}
 			runCtx = log.AddContextTag(runCtx)
