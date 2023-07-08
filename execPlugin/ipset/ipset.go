@@ -120,20 +120,20 @@ func (i *IPSet) APIHandler() http.Handler {
 	c := chi.NewRouter()
 	c.Get("/flush/all", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go i.flushAll(true, true)
+		go i.flushAll(r.Context(), true, true)
 	})
 	c.Get("/flush/4", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go i.flushAll(true, false)
+		go i.flushAll(r.Context(), true, false)
 	})
 	c.Get("/flush/6", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go i.flushAll(false, true)
+		go i.flushAll(r.Context(), false, true)
 	})
 	return c
 }
 
-func (i *IPSet) flushAll(inet4, inet6 bool) {
+func (i *IPSet) flushAll(ctx context.Context, inet4, inet6 bool) {
 	if i.ipset4 == nil && i.ipset6 == nil {
 		return
 	}
@@ -143,18 +143,18 @@ func (i *IPSet) flushAll(inet4, inet6 bool) {
 	defer i.flushLock.Unlock()
 	if inet4 && i.ipset4 != nil {
 		if i.ipset4 != nil {
-			i.logger.Info("flush all ipset4")
+			i.logger.InfoContext(ctx, "flush all ipset4")
 			err := i.ipset4.FlushAll()
 			if err != nil {
-				i.logger.Error("flush all ipset4 fail: %s", err)
+				i.logger.ErrorContext(ctx, "flush all ipset4 fail: %s", err)
 			}
 		}
 	}
 	if inet6 && i.ipset6 != nil {
-		i.logger.Info("flush all ipset6")
+		i.logger.InfoContext(ctx, "flush all ipset6")
 		err := i.ipset6.FlushAll()
 		if err != nil {
-			i.logger.Error("flush all ipset6 fail: %s", err)
+			i.logger.ErrorContext(ctx, "flush all ipset6 fail: %s", err)
 		}
 	}
 }

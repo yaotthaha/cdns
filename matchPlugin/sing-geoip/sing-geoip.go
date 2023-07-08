@@ -98,7 +98,7 @@ func (s *SingGeoIP) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go s.reloadGeoIP()
+		go s.reloadGeoIP(r.Context())
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -106,20 +106,20 @@ func (s *SingGeoIP) APIHandler() http.Handler {
 	return r
 }
 
-func (s *SingGeoIP) reloadGeoIP() {
+func (s *SingGeoIP) reloadGeoIP(ctx context.Context) {
 	if !s.reloadLock.TryLock() {
 		return
 	}
 	defer s.reloadLock.Unlock()
 	startTime := time.Now()
-	s.logger.Info("reload geoip...")
+	s.logger.InfoContext(ctx, "reload geoip...")
 	reader, codes, err := s.loadGeoIP()
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("reload geoip fail: %s", err))
+		s.logger.ErrorContext(ctx, fmt.Sprintf("reload geoip fail: %s", err))
 		return
 	}
 	s.reader.Store(reader)
-	s.logger.Info(fmt.Sprintf("reload geoip success: %d, cost: %s", len(codes), time.Since(startTime).String()))
+	s.logger.InfoContext(ctx, fmt.Sprintf("reload geoip success: %d, cost: %s", len(codes), time.Since(startTime).String()))
 }
 
 func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

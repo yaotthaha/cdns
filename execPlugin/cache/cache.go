@@ -144,11 +144,11 @@ func (c *Cache) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/clean", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go c.cleanCache()
+		go c.cleanCache(r.Context())
 	})
 	r.Get("/save", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go c.saveToFileAPI()
+		go c.saveToFileAPI(r.Context())
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -156,35 +156,35 @@ func (c *Cache) APIHandler() http.Handler {
 	return r
 }
 
-func (c *Cache) cleanCache() {
+func (c *Cache) cleanCache(ctx context.Context) {
 	if !c.cleanLock.TryLock() {
 		return
 	}
 	defer c.cleanLock.Unlock()
 	startTime := time.Now()
-	c.logger.Info("clean cache...")
+	c.logger.InfoContext(ctx, "clean cache...")
 	cacheMap := c.cacheMap.Load()
 	if cacheMap == nil {
 		return
 	}
 	cacheMap.CleanAll()
-	c.logger.Info("clean cache success, cost: %s", time.Since(startTime).String())
+	c.logger.InfoContext(ctx, "clean cache success, cost: %s", time.Since(startTime).String())
 }
 
-func (c *Cache) saveToFileAPI() {
+func (c *Cache) saveToFileAPI(ctx context.Context) {
 	if !c.dumpLock.TryLock() {
 		return
 	}
 	defer c.dumpLock.Unlock()
 	startTime := time.Now()
-	c.logger.Info("save cache to file...")
+	c.logger.InfoContext(ctx, "save cache to file...")
 	cacheMap := c.cacheMap.Load()
 	err := c.saveToFile(cacheMap)
 	if err != nil {
-		c.logger.Error(err.Error())
+		c.logger.ErrorContext(ctx, err.Error())
 		return
 	}
-	c.logger.Info("save cache to file success, cost: %s", time.Since(startTime).String())
+	c.logger.InfoContext(ctx, "save cache to file success, cost: %s", time.Since(startTime).String())
 }
 
 func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

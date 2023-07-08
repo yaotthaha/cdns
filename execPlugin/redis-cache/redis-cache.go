@@ -141,23 +141,23 @@ func (r *RedisCache) APIHandler() http.Handler {
 	chiRouter := chi.NewRouter()
 	chiRouter.Get("/clean", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go r.cleanCache()
+		go r.cleanCache(req.Context())
 	})
 	return chiRouter
 }
 
-func (r *RedisCache) cleanCache() {
+func (r *RedisCache) cleanCache(ctx context.Context) {
 	if !r.cleanLock.TryLock() {
 		return
 	}
 	defer r.cleanLock.Unlock()
-	r.logger.Info("clean cache...")
+	r.logger.InfoContext(ctx, "clean cache...")
 	err := r.redisClient.FlushAll(r.ctx).Err()
 	if err != nil {
-		r.logger.Error(fmt.Sprintf("clean cache fail: %s", err))
+		r.logger.ErrorContext(ctx, fmt.Sprintf("clean cache fail: %s", err))
 		return
 	}
-	r.logger.Info("clean cache done")
+	r.logger.InfoContext(ctx, "clean cache done")
 }
 
 func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

@@ -129,20 +129,20 @@ func (n *NftSet) APIHandler() http.Handler {
 	c := chi.NewRouter()
 	c.Get("/flush/all", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go n.flushAll(true, true)
+		go n.flushAll(r.Context(), true, true)
 	})
 	c.Get("/flush/4", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go n.flushAll(true, false)
+		go n.flushAll(r.Context(), true, false)
 	})
 	c.Get("/flush/6", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go n.flushAll(false, true)
+		go n.flushAll(r.Context(), false, true)
 	})
 	return c
 }
 
-func (n *NftSet) flushAll(inet4, inet6 bool) {
+func (n *NftSet) flushAll(ctx context.Context, inet4, inet6 bool) {
 	if n.nftset4 == nil && n.nftset6 == nil {
 		return
 	}
@@ -152,18 +152,18 @@ func (n *NftSet) flushAll(inet4, inet6 bool) {
 	defer n.flushLock.Unlock()
 	if inet4 && n.nftset4 != nil {
 		if n.nftset4 != nil {
-			n.logger.Info("flush all nftset4")
+			n.logger.InfoContext(ctx, "flush all nftset4")
 			err := n.nftset4.FlushAll()
 			if err != nil {
-				n.logger.Error("flush all nftset4 fail: %s", err)
+				n.logger.ErrorContext(ctx, "flush all nftset4 fail: %s", err)
 			}
 		}
 	}
 	if inet6 && n.nftset6 != nil {
-		n.logger.Info("flush all nftset6")
+		n.logger.InfoContext(ctx, "flush all nftset6")
 		err := n.nftset6.FlushAll()
 		if err != nil {
-			n.logger.Error("flush all nftset6 fail: %s", err)
+			n.logger.ErrorContext(ctx, "flush all nftset6 fail: %s", err)
 		}
 	}
 }

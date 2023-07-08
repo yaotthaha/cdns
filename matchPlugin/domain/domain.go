@@ -177,7 +177,7 @@ func (d *Domain) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go d.reloadFileRule()
+		go d.reloadFileRule(r.Context())
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -185,19 +185,19 @@ func (d *Domain) APIHandler() http.Handler {
 	return r
 }
 
-func (d *Domain) reloadFileRule() {
+func (d *Domain) reloadFileRule(ctx context.Context) {
 	if !d.reloadLock.TryLock() {
 		return
 	}
 	defer d.reloadLock.Unlock()
 	startTime := time.Now()
-	d.logger.Info("reload file rule...")
+	d.logger.InfoContext(ctx, "reload file rule...")
 	if d.fileList != nil {
 		files := make([]*rule, 0)
 		for _, f := range d.fileList {
 			rule, err := readRules(f)
 			if err != nil {
-				d.logger.Error(fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
+				d.logger.ErrorContext(ctx, fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
 				return
 			}
 			files = append(files, rule)
@@ -210,11 +210,11 @@ func (d *Domain) reloadFileRule() {
 			regexN   int
 		)
 		fullN, suffixN, keywordN, regexN = fileRule.length()
-		d.logger.Info(fmt.Sprintf("file domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
+		d.logger.InfoContext(ctx, fmt.Sprintf("file domain rule: full: %d, suffix: %d, keyword: %d, regex: %d", fullN, suffixN, keywordN, regexN))
 		d.fileRule.Store(fileRule)
-		d.logger.Info("reload file rule success, cost: %s", time.Since(startTime).String())
+		d.logger.InfoContext(ctx, "reload file rule success, cost: %s", time.Since(startTime).String())
 	} else {
-		d.logger.Info("no file to reload")
+		d.logger.InfoContext(ctx, "no file to reload")
 	}
 }
 

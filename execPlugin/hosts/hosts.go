@@ -106,29 +106,29 @@ func (h *Hosts) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go h.reloadRule()
+		go h.reloadRule(r.Context())
 	})
 	return r
 }
 
-func (h *Hosts) reloadRule() {
+func (h *Hosts) reloadRule(ctx context.Context) {
 	if !h.reloadLock.TryLock() {
 		return
 	}
 	defer h.reloadLock.Unlock()
-	h.logger.Info("reload rule...")
+	h.logger.InfoContext(ctx, "reload rule...")
 	rules := make([]*map[*rule][]netip.Addr, 0)
 	for _, f := range h.file {
 		ru, err := loadHostFile(f)
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("load hosts file %s fail: %s", f, err))
+			h.logger.ErrorContext(ctx, fmt.Sprintf("load hosts file %s fail: %s", f, err))
 			continue
 		}
 		rules = append(rules, ru)
 	}
 	rule := mergeRules(rules...)
 	h.fileRule.Store(rule)
-	h.logger.Info(fmt.Sprintf("reload rule success: %d", len(*rule)))
+	h.logger.InfoContext(ctx, fmt.Sprintf("reload rule success: %d", len(*rule)))
 }
 
 func (h *Hosts) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {

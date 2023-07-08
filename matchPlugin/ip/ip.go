@@ -156,24 +156,24 @@ func (i *IP) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go i.reloadFileRule()
+		go i.reloadFileRule(r.Context())
 	})
 	return r
 }
 
-func (i *IP) reloadFileRule() {
+func (i *IP) reloadFileRule(ctx context.Context) {
 	if !i.reloadLock.TryLock() {
 		return
 	}
 	defer i.reloadLock.Unlock()
 	startTime := time.Now()
-	i.logger.Info("reload file rule...")
+	i.logger.InfoContext(ctx, "reload file rule...")
 	if i.fileList != nil {
 		files := make([]*rule, 0)
 		for _, f := range i.fileList {
 			rule, err := readRules(f)
 			if err != nil {
-				i.logger.Error(fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
+				i.logger.ErrorContext(ctx, fmt.Sprintf("reload file rule fail, file %s, err: %s", f, err))
 				return
 			}
 			files = append(files, rule)
@@ -184,11 +184,11 @@ func (i *IP) reloadFileRule() {
 			cidrN int
 		)
 		ipN, cidrN = fileRule.length()
-		i.logger.Info(fmt.Sprintf("file ip rule: ip: %d, cidr: %d", ipN, cidrN))
+		i.logger.InfoContext(ctx, fmt.Sprintf("file ip rule: ip: %d, cidr: %d", ipN, cidrN))
 		i.fileRule.Store(fileRule)
-		i.logger.Info("reload file rule success, cost: %s", time.Since(startTime).String())
+		i.logger.InfoContext(ctx, "reload file rule success, cost: %s", time.Since(startTime).String())
 	} else {
-		i.logger.Info("no file to reload")
+		i.logger.InfoContext(ctx, "no file to reload")
 	}
 }
 

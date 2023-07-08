@@ -232,7 +232,7 @@ func (s *SingGeoSite) APIHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go s.reloadGeoSite()
+		go s.reloadGeoSite(r.Context())
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -240,20 +240,20 @@ func (s *SingGeoSite) APIHandler() http.Handler {
 	return r
 }
 
-func (s *SingGeoSite) reloadGeoSite() {
+func (s *SingGeoSite) reloadGeoSite(ctx context.Context) {
 	if !s.reloadLock.TryLock() {
 		return
 	}
 	defer s.reloadLock.Unlock()
 	startTime := time.Now()
-	s.logger.Info("reload geosite...")
+	s.logger.InfoContext(ctx, "reload geosite...")
 	codeMap, err := s.loadGeoSite()
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("reload geosite fail: %s", err))
+		s.logger.ErrorContext(ctx, fmt.Sprintf("reload geosite fail: %s", err))
 		return
 	}
 	s.codeMap.Store(codeMap)
-	s.logger.Info(fmt.Sprintf("reload geosite success, cost: %s", time.Since(startTime).String()))
+	s.logger.InfoContext(ctx, fmt.Sprintf("reload geosite success, cost: %s", time.Since(startTime).String()))
 }
 
 func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {

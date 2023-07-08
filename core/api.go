@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -36,7 +37,7 @@ type APIServer struct {
 	ctx            context.Context
 	core           adapter.Core
 	fatalClose     func(error)
-	logger         log.Logger
+	logger         log.ContextLogger
 	debug          bool
 	secret         string
 	listen         netip.AddrPort
@@ -56,7 +57,7 @@ func NewAPIServer(ctx context.Context, core adapter.Core, logger log.Logger, opt
 	a := &APIServer{
 		ctx:    ctx,
 		core:   core,
-		logger: log.NewTagLogger(logger, fmt.Sprintf("api server")),
+		logger: log.NewContextLogger(log.NewTagLogger(logger, fmt.Sprintf("api server"))),
 	}
 	if clogger, isSetColorLogger := a.logger.(log.SetColorLogger); isSetColorLogger {
 		clogger.SetColor(color.FgYellow)
@@ -92,6 +93,9 @@ func (a *APIServer) Start() error {
 			if a.debug {
 				initGoDebugHTTPHandler(a.chiMux)
 			}
+			r.Use(a.prepare)
+			r.Use(a.recover)
+			r.Use(a.debugLog)
 			if a.secret != "" {
 				r.Use(a.auth)
 			}
@@ -196,6 +200,13 @@ func (a *APIServer) MountExecStatisticPlugin(plugin adapter.WithExecPluginStatis
 	a.execPluginStatisticMap.Store(plugin, plugin)
 }
 
+func (a *APIServer) prepare(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(log.AddContextTag(r.Context())))
+	}
+	return http.HandlerFunc(fn)
+}
+
 func (a *APIServer) auth(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		if a.secret != "" {
@@ -206,11 +217,36 @@ func (a *APIServer) auth(next http.Handler) http.Handler {
 			}
 			bearer, token, ok := strings.Cut(authHeader, " ")
 			if !ok || bearer != "Bearer" || token != a.secret {
+				a.logger.WarnContext(r.Context(), fmt.Sprintf("unauthorized request"))
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, r)
 		}
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (a *APIServer) recover(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				ctx := r.Context()
+				a.logger.PrintContext(ctx, "Panic", fmt.Sprintf("panic: %s", err))
+				var stackBuf []byte
+				n := runtime.Stack(stackBuf, false)
+				a.logger.PrintContext(ctx, "Panic", fmt.Sprintf("stack: %s", stackBuf[:n]))
+			}
+		}()
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (a *APIServer) debugLog(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		a.logger.DebugContext(r.Context(), fmt.Sprintf("method: %s | client: %s | path: %s", r.Method, r.RemoteAddr, r.URL.Path))
+		next.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(fn)
 }
