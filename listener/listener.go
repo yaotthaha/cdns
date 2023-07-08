@@ -8,12 +8,10 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"runtime"
 	"strconv"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
-	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/listener"
 
@@ -86,37 +84,12 @@ func parseTLSOptions(tlsConfig *tls.Config, options listener.TLSOptions) error {
 	return nil
 }
 
-func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.Context, *dns.Msg) {
-	logger := h.ContextLogger()
-	tag := h.Tag()
-	ctx := h.Context()
-	workflow := h.GetWorkflow()
+func handler(core adapter.Core, h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.Context, *dns.Msg) {
 	dnsCtx := adapter.NewDNSContext()
-	dnsCtx.Listener = tag
+	dnsCtx.Listener = h.Tag()
 	dnsCtx.ReqMsg = reqMsg
 	dnsCtx.ClientIP = remoteIP
-	ctx = log.AddContextTag(ctx)
-	logger.InfoContext(ctx, fmt.Sprintf("receive request from %s, qtype: %s, qname: %s", dnsCtx.ClientIP.String(), dns.TypeToString[reqMsg.Question[0].Qtype], reqMsg.Question[0].Name))
-	workflow.Exec(ctx, dnsCtx)
-	defer func() {
-		err := recover()
-		if err != nil {
-			h.ContextLogger().PrintContext(ctx, "Panic", fmt.Sprintf("panic: %s", err))
-			var stackBuf []byte
-			n := runtime.Stack(stackBuf, false)
-			h.ContextLogger().PrintContext(ctx, "Panic", fmt.Sprintf("stack: %s", stackBuf[:n]))
-		}
-	}()
-	if dnsCtx.RespMsg == nil {
-		dnsCtx.RespMsg = &dns.Msg{}
-		dnsCtx.RespMsg.SetRcode(reqMsg, dns.RcodeServerFailure)
-		var name string
-		if len(dnsCtx.ReqMsg.Question) > 1 {
-			name = dnsCtx.ReqMsg.Question[0].Name
-		}
-		dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
-	}
-	return ctx, dnsCtx.RespMsg
+	return core.Handle(h.Context(), h.ContextLogger(), h.GetWorkflow(), dnsCtx)
 }
 
 func strToNetIPAddr(str string) netip.Addr {

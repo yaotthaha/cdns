@@ -10,6 +10,7 @@ import (
 	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
+	"github.com/yaotthaha/cdns/upstream"
 
 	"github.com/miekg/dns"
 )
@@ -145,7 +146,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 			go func(index int, req *dns.Msg) {
 				defer wg.Done()
 				for i := 0; i < retry; i++ {
-					respMsg, err := u.Exchange(ctx, req)
+					respMsg, err := upstream.Exchange(ctx, u, dnsCtx, req)
 					if err == nil {
 						respQueueLock.Lock()
 						respQueue[index] = respMsg

@@ -15,3 +15,8 @@ type Upstream interface {
 	Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg, error)
 	Dependencies() []string
 }
+
+type UpstreamExchangeWithDNSContext interface {
+	Upstream
+	ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.Msg, dnsCtx *DNSContext) (*dns.Msg, error)
+}

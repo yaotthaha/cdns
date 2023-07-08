@@ -11,6 +11,11 @@ import (
 
 type HookFunc func(ctx context.Context, dnsCtx *DNSContext)
 
+type (
+	PreUpstreamHookFunc  func(ctx context.Context, upstream Upstream, dnsReq *dns.Msg, dnsCtx *DNSContext)
+	PostUpstreamHookFunc func(ctx context.Context, upstream Upstream, dnsReq *dns.Msg, dnsResp *dns.Msg, dnsErr error, dnsCtx *DNSContext)
+)
+
 type ExtraDNSMsg struct {
 	ReqMsg  *dns.Msg
 	RespMsg *dns.Msg
@@ -28,27 +33,31 @@ func (e *ExtraDNSMsg) Value() any {
 }
 
 type DNSContext struct {
-	Listener       string
-	ClientIP       netip.Addr
-	Mark           uint64
-	MetaData       types.CloneableSyncMap[string, types.CloneableValue]
-	UsedWorkflow   *types.List[Workflow]
-	UsedUpstream   *types.List[Upstream]
-	ReqMsg         *dns.Msg
-	RespMsg        *dns.Msg
-	ExtraDNSMsgMap types.CloneableSyncMap[string, *ExtraDNSMsg]
-	PreHook        *types.List[*HookFunc]
-	PostHook       *types.List[*HookFunc]
+	Listener         string
+	ClientIP         netip.Addr
+	Mark             uint64
+	MetaData         types.CloneableSyncMap[string, types.CloneableValue]
+	UsedWorkflow     *types.List[Workflow]
+	UsedUpstream     *types.List[Upstream]
+	ReqMsg           *dns.Msg
+	RespMsg          *dns.Msg
+	ExtraDNSMsgMap   types.CloneableSyncMap[string, *ExtraDNSMsg]
+	PreHook          *types.List[*HookFunc]
+	PostHook         *types.List[*HookFunc]
+	PreUpstreamHook  *types.List[*PreUpstreamHookFunc]
+	PostUpstreamHook *types.List[*PostUpstreamHookFunc]
 }
 
 func NewDNSContext() *DNSContext {
 	return &DNSContext{
-		MetaData:       types.CloneableSyncMap[string, types.CloneableValue]{},
-		UsedWorkflow:   types.NewList[Workflow](),
-		UsedUpstream:   types.NewList[Upstream](),
-		ExtraDNSMsgMap: types.CloneableSyncMap[string, *ExtraDNSMsg]{},
-		PreHook:        types.NewList[*HookFunc](),
-		PostHook:       types.NewList[*HookFunc](),
+		MetaData:         types.CloneableSyncMap[string, types.CloneableValue]{},
+		UsedWorkflow:     types.NewList[Workflow](),
+		UsedUpstream:     types.NewList[Upstream](),
+		ExtraDNSMsgMap:   types.CloneableSyncMap[string, *ExtraDNSMsg]{},
+		PreHook:          types.NewList[*HookFunc](),
+		PostHook:         types.NewList[*HookFunc](),
+		PreUpstreamHook:  types.NewList[*PreUpstreamHookFunc](),
+		PostUpstreamHook: types.NewList[*PostUpstreamHookFunc](),
 	}
 }
 
@@ -81,5 +90,11 @@ func (d *DNSContext) SaveTo(dnsCtx *DNSContext) {
 	}
 	if d.PostHook != nil {
 		dnsCtx.PostHook = d.PostHook.Clone()
+	}
+	if d.PreUpstreamHook != nil {
+		dnsCtx.PreUpstreamHook = d.PreUpstreamHook.Clone()
+	}
+	if d.PostUpstreamHook != nil {
+		dnsCtx.PostUpstreamHook = d.PostUpstreamHook.Clone()
 	}
 }

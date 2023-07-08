@@ -28,9 +28,10 @@ type multiUpstream struct {
 }
 
 var (
-	_ adapter.Upstream = (*multiUpstream)(nil)
-	_ adapter.Starter  = (*multiUpstream)(nil)
-	_ adapter.WithCore = (*multiUpstream)(nil)
+	_ adapter.Upstream                       = (*multiUpstream)(nil)
+	_ adapter.UpstreamExchangeWithDNSContext = (*multiUpstream)(nil)
+	_ adapter.Starter                        = (*multiUpstream)(nil)
+	_ adapter.WithCore                       = (*multiUpstream)(nil)
 )
 
 func NewMultiUpstream(ctx context.Context, logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
@@ -116,8 +117,51 @@ func (u *multiUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Msg
 		return respMsg, nil
 	}
 	err := saveErr.Load()
-	if err != nil {
+	if err == nil {
 		err = ctx.Err()
+	}
+	if err == nil {
+		err = fmt.Errorf("unknown error")
+	}
+	return nil, err
+}
+
+func (u *multiUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.Msg, dnsCtx *adapter.DNSContext) (*dns.Msg, error) {
+	wg := sync.WaitGroup{}
+	var saveResult atomic.Pointer[dns.Msg]
+	var saveErr types.AtomicValue[error]
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	u.logger.DebugContext(ctx, fmt.Sprintf("multi forward to [%s]", strings.Join(u.upstreamTags, ", ")))
+	for _, up := range u.upstreams {
+		wg.Add(1)
+		go func(upstream adapter.Upstream) {
+			defer wg.Done()
+			u.logger.DebugContext(ctx, fmt.Sprintf("multi forward to %s", upstream.Tag()))
+			respMsg, err := Exchange(ctx, upstream, dnsCtx, dnsMsg)
+			if err == nil {
+				saveResult.CompareAndSwap(nil, respMsg)
+				cancel()
+			} else {
+				saveErr.CompareAndSwap(nil, err)
+			}
+		}(up)
+	}
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
+	<-ctx.Done()
+	respMsg := saveResult.Load()
+	if respMsg != nil {
+		return respMsg, nil
+	}
+	err := saveErr.Load()
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err == nil {
+		err = fmt.Errorf("unknown error")
 	}
 	return nil, err
 }

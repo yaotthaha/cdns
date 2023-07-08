@@ -116,6 +116,12 @@ func (u *queryTestUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns
 	return up.Exchange(ctx, dnsMsg)
 }
 
+func (u *queryTestUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.Msg, dnsCtx *adapter.DNSContext) (*dns.Msg, error) {
+	up := u.getBestUpstream()
+	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
+	return Exchange(ctx, up, dnsCtx, dnsMsg)
+}
+
 func (u *queryTestUpstream) test() {
 	if !u.testLock.TryLock() {
 		return

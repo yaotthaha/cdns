@@ -106,3 +106,45 @@ func parseTLSOptions(options upstream.TLSOptions, backupServerName string) (*tls
 func logDNSMsg(dnsMsg *dns.Msg) string {
 	return fmt.Sprintf("qtype: %s, qname: %s", dns.TypeToString[dnsMsg.Question[0].Qtype], dnsMsg.Question[0].Name)
 }
+
+func Exchange(ctx context.Context, upstream adapter.Upstream, dnsCtx *adapter.DNSContext, dnsMsg *dns.Msg) (*dns.Msg, error) {
+	if dnsCtx.PreUpstreamHook.Len() > 0 {
+		preUpstreamHookFuncs := make([]*adapter.PreUpstreamHookFunc, 0)
+		dnsCtx.PreUpstreamHook.Range(func(_ int, value *adapter.PreUpstreamHookFunc) bool {
+			preUpstreamHookFuncs = append(preUpstreamHookFuncs, value)
+			return true
+		})
+		for _, hookFunc := range preUpstreamHookFuncs {
+			if hookFunc != nil {
+				(*hookFunc)(ctx, upstream, dnsMsg, dnsCtx)
+			}
+		}
+	}
+	var (
+		resp *dns.Msg
+		err  error
+	)
+	if uc, ok := upstream.(adapter.UpstreamExchangeWithDNSContext); ok {
+		resp, err = uc.ExchangeWithDNSContext(ctx, dnsMsg, dnsCtx)
+	} else {
+		resp, err = upstream.Exchange(ctx, dnsMsg)
+	}
+	defer func() {
+		if dnsCtx.PostUpstreamHook.Len() > 0 {
+			postUpstreamHookFuncs := make([]*adapter.PostUpstreamHookFunc, 0)
+			dnsCtx.PostUpstreamHook.Range(func(_ int, value *adapter.PostUpstreamHookFunc) bool {
+				postUpstreamHookFuncs = append(postUpstreamHookFuncs, value)
+				return true
+			})
+			for _, hookFunc := range postUpstreamHookFuncs {
+				if hookFunc != nil {
+					(*hookFunc)(ctx, upstream, dnsMsg, resp, err, dnsCtx)
+				}
+			}
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}

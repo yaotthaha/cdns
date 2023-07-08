@@ -132,7 +132,7 @@ func (l *udpListener) GetWorkflow() adapter.Workflow {
 
 func (l *udpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	defer w.Close()
-	ctx, respMsg := handler(l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
+	ctx, respMsg := handler(l.core, l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
 	if respMsg == nil {
 		return
 	}

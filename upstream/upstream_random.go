@@ -25,9 +25,10 @@ type randomUpstream struct {
 }
 
 var (
-	_ adapter.Upstream = (*randomUpstream)(nil)
-	_ adapter.Starter  = (*randomUpstream)(nil)
-	_ adapter.WithCore = (*randomUpstream)(nil)
+	_ adapter.Upstream                       = (*randomUpstream)(nil)
+	_ adapter.UpstreamExchangeWithDNSContext = (*randomUpstream)(nil)
+	_ adapter.Starter                        = (*randomUpstream)(nil)
+	_ adapter.WithCore                       = (*randomUpstream)(nil)
 )
 
 func NewRandomUpstream(logger log.ContextLogger, options upstream.UpstreamOptions) (adapter.Upstream, error) {
@@ -86,4 +87,11 @@ func (u *randomUpstream) Exchange(ctx context.Context, dnsMsg *dns.Msg) (*dns.Ms
 	up := u.upstreams[r.Intn(len(u.upstreams))]
 	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
 	return up.Exchange(ctx, dnsMsg)
+}
+
+func (u *randomUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.Msg, dnsCtx *adapter.DNSContext) (*dns.Msg, error) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	up := u.upstreams[r.Intn(len(u.upstreams))]
+	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
+	return Exchange(ctx, up, dnsCtx, dnsMsg)
 }

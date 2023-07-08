@@ -3,10 +3,12 @@ package core
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/execPlugin"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/listener"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/matchPlugin"
@@ -15,6 +17,7 @@ import (
 	"github.com/yaotthaha/cdns/workflow"
 
 	"github.com/fatih/color"
+	"github.com/miekg/dns"
 )
 
 type Core struct {
@@ -45,7 +48,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		clogger.SetColor(color.FgYellow)
 	}
 	// Init API Server
-	apiServer, err := NewAPIServer(ctx, logger, options.APIOptions)
+	apiServer, err := NewAPIServer(ctx, core, logger, options.APIOptions)
 	if err != nil {
 		return nil, fmt.Errorf("init api server fail: %s", err)
 	}
@@ -338,4 +341,33 @@ func (c *Core) GetMatchPlugin(tag string) adapter.MatchPlugin {
 
 func (c *Core) GetExecPlugin(tag string) adapter.ExecPlugin {
 	return c.execPlugins[tag]
+}
+
+func (c *Core) Handle(ctx context.Context, logger log.ContextLogger, w adapter.Workflow, dnsCtx *adapter.DNSContext) (context.Context, *dns.Msg) {
+	ctx = log.AddContextTag(ctx)
+	logger.InfoContext(ctx, fmt.Sprintf("receive request from %s, qtype: %s, qname: %s", dnsCtx.ClientIP.String(), dns.TypeToString[dnsCtx.ReqMsg.Question[0].Qtype], dnsCtx.ReqMsg.Question[0].Name))
+	if c.apiServer.enableStatistic {
+		hook := c.apiServer.upstreamStatisticHook
+		dnsCtx.PostUpstreamHook.Append((*adapter.PostUpstreamHookFunc)(&hook))
+	}
+	w.Exec(ctx, dnsCtx)
+	defer func() {
+		err := recover()
+		if err != nil {
+			logger.PrintContext(ctx, "Panic", fmt.Sprintf("panic: %s", err))
+			var stackBuf []byte
+			n := runtime.Stack(stackBuf, false)
+			logger.PrintContext(ctx, "Panic", fmt.Sprintf("stack: %s", stackBuf[:n]))
+		}
+	}()
+	if dnsCtx.RespMsg == nil {
+		dnsCtx.RespMsg = &dns.Msg{}
+		dnsCtx.RespMsg.SetRcode(dnsCtx.ReqMsg, dns.RcodeServerFailure)
+		var name string
+		if len(dnsCtx.ReqMsg.Question) > 1 {
+			name = dnsCtx.ReqMsg.Question[0].Name
+		}
+		dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
+	}
+	return ctx, dnsCtx.RespMsg
 }

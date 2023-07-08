@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -9,13 +10,16 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option"
 
 	"github.com/fatih/color"
 	"github.com/go-chi/chi"
+	"github.com/miekg/dns"
 )
 
 type MountMatchPlugin interface {
@@ -30,6 +34,7 @@ type MountExecPlugin interface {
 
 type APIServer struct {
 	ctx            context.Context
+	core           adapter.Core
 	fatalClose     func(error)
 	logger         log.Logger
 	debug          bool
@@ -41,11 +46,15 @@ type APIServer struct {
 	matchLock      sync.Mutex
 	execPluginAPI  map[string]http.Handler
 	execLock       sync.Mutex
+
+	enableStatistic      bool
+	upstreamStatisticMap types.CloneableSyncMap[adapter.Upstream, *upstreamStatisticData]
 }
 
-func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOptions) (*APIServer, error) {
+func NewAPIServer(ctx context.Context, core adapter.Core, logger log.Logger, options option.APIOptions) (*APIServer, error) {
 	a := &APIServer{
 		ctx:    ctx,
+		core:   core,
 		logger: log.NewTagLogger(logger, fmt.Sprintf("api server")),
 	}
 	if clogger, isSetColorLogger := a.logger.(log.SetColorLogger); isSetColorLogger {
@@ -60,6 +69,7 @@ func NewAPIServer(ctx context.Context, logger log.Logger, options option.APIOpti
 	}
 	a.secret = options.Secret
 	a.debug = options.Debug
+	a.enableStatistic = options.EnableStatistic
 	a.chiMux = chi.NewMux()
 	a.chiMux.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -98,6 +108,9 @@ func (a *APIServer) Start() error {
 				}
 			}
 			a.execLock.Unlock()
+			if a.enableStatistic {
+				r.Mount("/statistic", a.statisticHandler())
+			}
 		})
 		go func() {
 			err := a.httpServer.ListenAndServe()
@@ -186,4 +199,93 @@ func initGoDebugHTTPHandler(r *chi.Mux) {
 		r.HandleFunc("/pprof/symbol", pprof.Symbol)
 		r.HandleFunc("/pprof/trace", pprof.Trace)
 	})
+}
+
+func (a *APIServer) statisticHandler() http.Handler {
+	chiRouter := chi.NewRouter()
+	chiRouter.Get("/upstream", func(w http.ResponseWriter, r *http.Request) {
+		data := a.getUpstreamStatisticData()
+		rawData, err := json.Marshal(data)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(rawData)
+	})
+	chiRouter.Get("/upstream/{upstreamTag}", func(w http.ResponseWriter, r *http.Request) {
+		upstreamTag := chi.URLParam(r, "upstreamTag")
+		if upstreamTag == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		data := a.getUpstreamStatisticDataFromTa(upstreamTag)
+		if data == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		rawData, err := json.Marshal(data)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(rawData)
+	})
+	return chiRouter
+}
+
+func (a *APIServer) upstreamStatisticHook(_ context.Context, upstream adapter.Upstream, _ *dns.Msg, _ *dns.Msg, dnsErr error, _ *adapter.DNSContext) {
+	da, _ := a.upstreamStatisticMap.LoadOrStore(upstream, &upstreamStatisticData{})
+	da.Total.Add(1)
+	if dnsErr != nil {
+		da.Fail.Add(1)
+	}
+}
+
+func (a *APIServer) getUpstreamStatisticData() map[string]any {
+	data := make(map[string]any)
+	a.upstreamStatisticMap.Range(func(key adapter.Upstream, value *upstreamStatisticData) bool {
+		data[key.Tag()] = map[string]any{
+			"total": value.Total.Load(),
+			"fail":  value.Fail.Load(),
+		}
+		return true
+	})
+	return data
+}
+
+func (a *APIServer) getUpstreamStatisticDataFromTa(upstreamTag string) map[string]any {
+	upstream := a.core.GetUpstream(upstreamTag)
+	if upstream == nil {
+		return nil
+	}
+	da, ok := a.upstreamStatisticMap.Load(upstream)
+	if !ok {
+		return nil
+	}
+	data := map[string]any{
+		"total": da.Total.Load(),
+		"fail":  da.Fail.Load(),
+	}
+	return data
+}
+
+type upstreamStatisticData struct {
+	Total atomic.Uint64
+	Fail  atomic.Uint64
+}
+
+func (u *upstreamStatisticData) Clone() types.CloneableValue {
+	uu := &upstreamStatisticData{
+		Total: atomic.Uint64{},
+		Fail:  atomic.Uint64{},
+	}
+	uu.Total.Store(u.Total.Load())
+	uu.Fail.Store(u.Fail.Load())
+	return uu
+}
+
+func (u *upstreamStatisticData) Value() any {
+	return u
 }

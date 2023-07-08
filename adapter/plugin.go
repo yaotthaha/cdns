@@ -21,6 +21,7 @@ type WithMatchPluginCore interface {
 
 type ExecPluginCore interface {
 	GetWorkflow(string) Workflow
+	GetUpstream(string) Upstream
 }
 
 type ExecPlugin interface {

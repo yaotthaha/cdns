@@ -136,7 +136,7 @@ func (l *tcpListener) GetWorkflow() adapter.Workflow {
 
 func (l *tcpListener) ServeDNS(w dns.ResponseWriter, reqMsg *dns.Msg) {
 	defer w.Close()
-	ctx, respMsg := handler(l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
+	ctx, respMsg := handler(l.core, l, reqMsg, strToNetIPAddr(w.RemoteAddr().String()))
 	if respMsg == nil {
 		return
 	}

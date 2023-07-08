@@ -417,7 +417,7 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, []byte("400 Bad Request"))
 		return
 	}
-	ctx, respMsg := handler(l, dnsMsg, remoteIP)
+	ctx, respMsg := handler(l.core, l, dnsMsg, remoteIP)
 	if respMsg == nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintln(w, []byte("500 Server Internal Error"))
