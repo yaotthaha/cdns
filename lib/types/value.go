@@ -121,3 +121,82 @@ func (cm *CloneableSyncMap[K, V]) Clone() *CloneableSyncMap[K, V] {
 	})
 	return &cmClone
 }
+
+type SyncMap[K comparable, V any] struct {
+	m sync.Map
+}
+
+func (cm *SyncMap[K, V]) Load(key K) (value V, ok bool) {
+	var valueAny any
+	valueAny, ok = cm.m.Load(key)
+	if valueAny != nil {
+		value = valueAny.(V)
+	}
+	return
+}
+
+func (cm *SyncMap[K, V]) Store(key K, value V) {
+	cm.m.Store(key, value)
+}
+
+func (cm *SyncMap[K, V]) LoadOrStore(key K, value V) (actual V, loaded bool) {
+	var atcualAny any
+	atcualAny, loaded = cm.m.LoadOrStore(key, value)
+	if atcualAny != nil {
+		actual = atcualAny.(V)
+	}
+	return
+}
+
+func (cm *SyncMap[K, V]) LoadAndDelete(key K) (value V, loaded bool) {
+	var valueAny any
+	valueAny, loaded = cm.m.LoadAndDelete(key)
+	if valueAny != nil {
+		value = valueAny.(V)
+	}
+	return
+}
+
+func (cm *SyncMap[K, V]) Delete(key K) {
+	cm.m.Delete(key)
+}
+
+func (cm *SyncMap[K, V]) Swap(key K, value V) (previous V, loaded bool) {
+	var previousAny any
+	previousAny, loaded = cm.m.Swap(key, value)
+	if previousAny != nil {
+		previous = previousAny.(V)
+	}
+	return
+}
+
+func (cm *SyncMap[K, V]) CompareAndSwap(key K, old V, new V) bool {
+	return cm.m.CompareAndSwap(key, old, new)
+}
+
+func (cm *SyncMap[K, V]) CompareAndDelete(key K, old V) (deleted bool) {
+	return cm.m.CompareAndDelete(key, old)
+}
+
+func (cm *SyncMap[K, V]) Range(f func(key K, value V) bool) {
+	cm.m.Range(func(keyAny any, valueAny any) bool {
+		var key K
+		var value V
+		if keyAny != nil {
+			key = keyAny.(K)
+		}
+		if valueAny != nil {
+			value = valueAny.(V)
+		}
+		return f(key, value)
+	})
+}
+
+func (cm *SyncMap[K, V]) Len() int {
+	var length int
+	cm.m.Range(func(keyAny any, valueAny any) bool {
+		length++
+		return true
+	})
+	return length
+}

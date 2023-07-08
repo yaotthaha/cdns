@@ -19,6 +19,11 @@ type WithMatchPluginCore interface {
 	WithCore(MatchPluginCore)
 }
 
+type WithMatchPluginStatisticAPIHandler interface {
+	MatchPlugin
+	StatisticAPIHandler
+}
+
 type ExecPluginCore interface {
 	GetWorkflow(string) Workflow
 	GetUpstream(string) Upstream
@@ -32,6 +37,15 @@ type ExecPlugin interface {
 
 type WithExecPluginCore interface {
 	WithCore(ExecPluginCore)
+}
+
+type WithExecPluginStatisticAPIHandler interface {
+	ExecPlugin
+	StatisticAPIHandler
+}
+
+type StatisticAPIHandler interface {
+	StatisticAPIHandler() http.Handler
 }
 
 type APIHandler interface {
