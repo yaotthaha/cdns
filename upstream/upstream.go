@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
@@ -102,26 +101,6 @@ func parseTLSOptions(options upstream.TLSOptions, backupServerName string) (*tls
 		tlsConfig.RootCAs = rootCAs
 	}
 	return tlsConfig, nil
-}
-
-func RetryUpstream(ctx context.Context, upstream adapter.Upstream, dnsMsg *dns.Msg, dnsCtx *adapter.DNSContext) (*dns.Msg, error) {
-	for i := 0; i < 3; i++ {
-		startTime := time.Now()
-		resp, err := upstream.Exchange(ctx, dnsMsg)
-		if err == nil {
-			if dnsCtx != nil {
-				dnsCtx.SetKV("upstream-time-consuming-"+upstream.Tag(), time.Since(startTime))
-			}
-			return resp, nil
-		}
-		upstream.ContextLogger().WarnContext(ctx, fmt.Sprintf("retry %d: %s", i+1, logDNSMsg(dnsMsg)))
-	}
-	if dnsCtx != nil {
-		dnsCtx.SetKV("upstream-time-consuming-"+upstream.Tag(), time.Duration(-1))
-	}
-	err := fmt.Errorf("retry upstream failed: %s", logDNSMsg(dnsMsg))
-	upstream.ContextLogger().ErrorContext(ctx, err.Error())
-	return nil, err
 }
 
 func logDNSMsg(dnsMsg *dns.Msg) string {

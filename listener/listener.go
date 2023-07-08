@@ -91,7 +91,7 @@ func handler(h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.
 	tag := h.Tag()
 	ctx := h.Context()
 	workflow := h.GetWorkflow()
-	dnsCtx := &adapter.DNSContext{}
+	dnsCtx := adapter.NewDNSContext()
 	dnsCtx.Listener = tag
 	dnsCtx.ReqMsg = reqMsg
 	dnsCtx.ClientIP = remoteIP

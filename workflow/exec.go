@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
-	"github.com/yaotthaha/cdns/upstream"
 
 	"github.com/miekg/dns"
 )
@@ -107,12 +107,73 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		dnsCtx.Mark = *e.setMark
 	}
 	if e.upstream != nil {
+		if dnsCtx.PreHook.Len() > 0 {
+			preHookFuncList := make([]*adapter.HookFunc, 0)
+			dnsCtx.PreHook.Range(func(_ int, hookFunc *adapter.HookFunc) bool {
+				preHookFuncList = append(preHookFuncList, hookFunc)
+				return true
+			})
+			for _, hookFunc := range preHookFuncList {
+				if hookFunc != nil {
+					(*hookFunc)(ctx, dnsCtx)
+				}
+			}
+		}
 		logger.DebugContext(ctx, fmt.Sprintf("sends to upstream: %s", *e.upstream))
 		u := e.core.GetUpstream(*e.upstream)
-		dnsCtx.WithUpstream(u)
-		respMsg, err := upstream.RetryUpstream(ctx, u, dnsCtx.ReqMsg, dnsCtx)
-		if err == nil {
-			dnsCtx.RespMsg = respMsg
+		dnsCtx.UsedUpstream.Append(u)
+		retry := 3
+		extraMsgs := make([]*adapter.ExtraDNSMsg, 0)
+		reqQueue := make([]*dns.Msg, 0)
+		var respQueueLock sync.Mutex
+		if dnsCtx.ExtraDNSMsgMap.Len() > 0 {
+			dnsCtx.ExtraDNSMsgMap.Range(func(key string, value *adapter.ExtraDNSMsg) bool {
+				extraMsgs = append(extraMsgs, value)
+				return true
+			})
+		}
+		if len(extraMsgs) > 0 {
+			for _, extraMsg := range extraMsgs {
+				reqQueue = append(reqQueue, extraMsg.ReqMsg)
+			}
+		}
+		reqQueue = append(reqQueue, dnsCtx.ReqMsg)
+		respQueue := make([]*dns.Msg, len(reqQueue))
+		wg := sync.WaitGroup{}
+		for i, req := range reqQueue {
+			wg.Add(1)
+			go func(index int, req *dns.Msg) {
+				defer wg.Done()
+				for i := 0; i < retry; i++ {
+					respMsg, err := u.Exchange(ctx, req)
+					if err == nil {
+						respQueueLock.Lock()
+						respQueue[index] = respMsg
+						respQueueLock.Unlock()
+						break
+					}
+					u.ContextLogger().DebugContext(ctx, fmt.Sprintf("retry %d: %s", i+1, req.Question[0].String()))
+				}
+			}(i, req)
+		}
+		wg.Wait()
+		if len(extraMsgs) > 0 {
+			for i, extraMsg := range extraMsgs {
+				extraMsg.RespMsg = respQueue[i]
+			}
+		}
+		dnsCtx.RespMsg = respQueue[len(respQueue)-1]
+		if dnsCtx.PostHook.Len() > 0 {
+			postHookFuncList := make([]*adapter.HookFunc, 0)
+			dnsCtx.PostHook.Range(func(_ int, hookFunc *adapter.HookFunc) bool {
+				postHookFuncList = append(postHookFuncList, hookFunc)
+				return true
+			})
+			for _, hookFunc := range postHookFuncList {
+				if hookFunc != nil {
+					(*hookFunc)(ctx, dnsCtx)
+				}
+			}
 		}
 	}
 	if e.plugin != nil {
