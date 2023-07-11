@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
@@ -23,14 +22,24 @@ import (
 	"github.com/miekg/dns"
 )
 
-type MountMatchPlugin interface {
+type MountAPIMatchPlugin interface {
 	adapter.MatchPlugin
 	adapter.APIHandler
 }
 
-type MountExecPlugin interface {
+type MountAPIExecPlugin interface {
 	adapter.ExecPlugin
 	adapter.APIHandler
+}
+
+type MountStatisticAPIMatchPlugin interface {
+	adapter.MatchPlugin
+	adapter.StatisticAPIHandler
+}
+
+type MountStatisticAPIExecPlugin interface {
+	adapter.ExecPlugin
+	adapter.StatisticAPIHandler
 }
 
 type APIServer struct {
@@ -43,14 +52,13 @@ type APIServer struct {
 	listen         netip.AddrPort
 	chiMux         *chi.Mux
 	httpServer     *http.Server
-	matchPluginAPI types.SyncMap[adapter.MatchPlugin, http.Handler]
-	execPluginAPI  types.SyncMap[adapter.ExecPlugin, http.Handler]
-	execLock       sync.Mutex
+	apiMatchPlugin types.SyncMap[adapter.MatchPlugin, http.Handler]
+	apiExecPlugin  types.SyncMap[adapter.ExecPlugin, http.Handler]
 
 	enableStatistic         bool
-	upstreamStatisticMap    types.SyncMap[adapter.Upstream, *upstreamStatisticData]
-	matchPluginStatisticMap types.SyncMap[adapter.MatchPlugin, adapter.WithMatchPluginStatisticAPIHandler]
-	execPluginStatisticMap  types.SyncMap[adapter.ExecPlugin, adapter.WithExecPluginStatisticAPIHandler]
+	statisticAPIUpstream    types.SyncMap[adapter.Upstream, *upstreamStatisticData]
+	statisticAPIMatchPlugin types.SyncMap[adapter.MatchPlugin, http.Handler]
+	statisticAPIExecPlugin  types.SyncMap[adapter.ExecPlugin, http.Handler]
 }
 
 func NewAPIServer(ctx context.Context, core adapter.Core, logger log.Logger, options option.APIOptions) (*APIServer, error) {
@@ -99,7 +107,7 @@ func (a *APIServer) Start() error {
 			if a.secret != "" {
 				r.Use(a.auth)
 			}
-			if a.matchPluginAPI.Len() > 0 {
+			if a.apiMatchPlugin.Len() > 0 {
 				r.Mount("/plugin/match/{matchPluginTag}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					matchPluginTag := chi.URLParam(r, "matchPluginTag")
 					if matchPluginTag == "" {
@@ -111,7 +119,7 @@ func (a *APIServer) Start() error {
 						w.WriteHeader(http.StatusNotFound)
 						return
 					}
-					handler, ok := a.matchPluginAPI.Load(matchPlugin)
+					handler, ok := a.apiMatchPlugin.Load(matchPlugin)
 					if !ok {
 						w.WriteHeader(http.StatusNotFound)
 						return
@@ -119,7 +127,7 @@ func (a *APIServer) Start() error {
 					handler.ServeHTTP(w, r)
 				}))
 			}
-			if a.execPluginAPI.Len() > 0 {
+			if a.apiExecPlugin.Len() > 0 {
 				r.Mount("/plugin/exec/{execPluginTag}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					execPluginTag := chi.URLParam(r, "execPluginTag")
 					if execPluginTag == "" {
@@ -131,7 +139,7 @@ func (a *APIServer) Start() error {
 						w.WriteHeader(http.StatusNotFound)
 						return
 					}
-					handler, ok := a.execPluginAPI.Load(execPlugin)
+					handler, ok := a.apiExecPlugin.Load(execPlugin)
 					if !ok {
 						w.WriteHeader(http.StatusNotFound)
 						return
@@ -167,38 +175,38 @@ func (a *APIServer) Close() error {
 	return nil
 }
 
-func (a *APIServer) MountMatchPlugin(plugin MountMatchPlugin) {
+func (a *APIServer) MountAPIMatchPlugin(plugin MountAPIMatchPlugin) {
 	if plugin == nil || a.chiMux == nil {
 		return
 	}
 	apiHandler := plugin.APIHandler()
 	if apiHandler != nil {
-		a.matchPluginAPI.Store(plugin, apiHandler)
+		a.apiMatchPlugin.Store(plugin, apiHandler)
 	}
 }
 
-func (a *APIServer) MountExecPlugin(plugin MountExecPlugin) {
+func (a *APIServer) MountAPIExecPlugin(plugin MountAPIExecPlugin) {
 	if plugin == nil || a.chiMux == nil {
 		return
 	}
 	apiHandler := plugin.APIHandler()
 	if apiHandler != nil {
-		a.execPluginAPI.Store(plugin, apiHandler)
+		a.apiExecPlugin.Store(plugin, apiHandler)
 	}
 }
 
-func (a *APIServer) MountMatchStatisticPlugin(plugin adapter.WithMatchPluginStatisticAPIHandler) {
+func (a *APIServer) MountMatchStatisticPlugin(plugin MountStatisticAPIMatchPlugin) {
 	if plugin == nil || a.chiMux == nil || !a.enableStatistic {
 		return
 	}
-	a.matchPluginStatisticMap.Store(plugin, plugin)
+	a.statisticAPIMatchPlugin.Store(plugin, plugin.StatisticAPIHandler())
 }
 
-func (a *APIServer) MountExecStatisticPlugin(plugin adapter.WithExecPluginStatisticAPIHandler) {
+func (a *APIServer) MountExecStatisticPlugin(plugin MountStatisticAPIExecPlugin) {
 	if plugin == nil || a.chiMux == nil || !a.enableStatistic {
 		return
 	}
-	a.execPluginStatisticMap.Store(plugin, plugin)
+	a.statisticAPIExecPlugin.Store(plugin, plugin.StatisticAPIHandler())
 }
 
 func (a *APIServer) prepare(next http.Handler) http.Handler {
@@ -302,13 +310,13 @@ func (a *APIServer) statisticHandler() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write(rawData)
 	})
-	if a.matchPluginStatisticMap.Len() > 0 {
+	if a.statisticAPIMatchPlugin.Len() > 0 {
 		chiRouter.Get("/plugin/match", func(w http.ResponseWriter, r *http.Request) {
 			matchPlugins := make([]map[string]any, 0)
-			a.matchPluginStatisticMap.Range(func(_ adapter.MatchPlugin, value adapter.WithMatchPluginStatisticAPIHandler) bool {
+			a.statisticAPIMatchPlugin.Range(func(plugin adapter.MatchPlugin, _ http.Handler) bool {
 				matchPlugins = append(matchPlugins, map[string]any{
-					"tag":  value.Tag(),
-					"type": value.Type(),
+					"tag":  plugin.Tag(),
+					"type": plugin.Type(),
 				})
 				return true
 			})
@@ -335,21 +343,21 @@ func (a *APIServer) statisticHandler() http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			handler, ok := a.matchPluginStatisticMap.Load(matchPlugin)
+			handler, ok := a.statisticAPIMatchPlugin.Load(matchPlugin)
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			handler.StatisticAPIHandler().ServeHTTP(w, r)
+			handler.ServeHTTP(w, r)
 		}))
 	}
-	if a.execPluginStatisticMap.Len() > 0 {
+	if a.statisticAPIExecPlugin.Len() > 0 {
 		chiRouter.Get("/plugin/exec", func(w http.ResponseWriter, r *http.Request) {
 			execPlugins := make([]map[string]any, 0)
-			a.execPluginStatisticMap.Range(func(_ adapter.ExecPlugin, value adapter.WithExecPluginStatisticAPIHandler) bool {
+			a.statisticAPIExecPlugin.Range(func(plugin adapter.ExecPlugin, _ http.Handler) bool {
 				execPlugins = append(execPlugins, map[string]any{
-					"tag":  value.Tag(),
-					"type": value.Type(),
+					"tag":  plugin.Tag(),
+					"type": plugin.Type(),
 				})
 				return true
 			})
@@ -376,19 +384,19 @@ func (a *APIServer) statisticHandler() http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			handler, ok := a.execPluginStatisticMap.Load(execPlugin)
+			handler, ok := a.statisticAPIExecPlugin.Load(execPlugin)
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			handler.StatisticAPIHandler().ServeHTTP(w, r)
+			handler.ServeHTTP(w, r)
 		}))
 	}
 	return chiRouter
 }
 
 func (a *APIServer) upstreamStatisticHook(_ context.Context, upstream adapter.Upstream, _ *dns.Msg, _ *dns.Msg, dnsErr error, _ *adapter.DNSContext) {
-	da, _ := a.upstreamStatisticMap.LoadOrStore(upstream, &upstreamStatisticData{})
+	da, _ := a.statisticAPIUpstream.LoadOrStore(upstream, &upstreamStatisticData{})
 	da.Total.Add(1)
 	if dnsErr != nil {
 		da.Fail.Add(1)
@@ -397,12 +405,12 @@ func (a *APIServer) upstreamStatisticHook(_ context.Context, upstream adapter.Up
 
 func (a *APIServer) getUpstreamStatisticData() map[string]any {
 	data := make(map[string]any)
-	a.upstreamStatisticMap.Range(func(key adapter.Upstream, value *upstreamStatisticData) bool {
-		data[key.Tag()] = map[string]any{
-			"tag":   key.Tag(),
-			"type":  key.Type(),
-			"total": value.Total.Load(),
-			"fail":  value.Fail.Load(),
+	a.statisticAPIUpstream.Range(func(upstream adapter.Upstream, upstreamData *upstreamStatisticData) bool {
+		data[upstream.Tag()] = map[string]any{
+			"tag":   upstream.Tag(),
+			"type":  upstream.Type(),
+			"total": upstreamData.Total.Load(),
+			"fail":  upstreamData.Fail.Load(),
 		}
 		return true
 	})
@@ -414,7 +422,7 @@ func (a *APIServer) getUpstreamStatisticDataFromTag(upstreamTag string) map[stri
 	if upstream == nil {
 		return nil
 	}
-	da, ok := a.upstreamStatisticMap.Load(upstream)
+	da, ok := a.statisticAPIUpstream.Load(upstream)
 	if !ok {
 		return nil
 	}

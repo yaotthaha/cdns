@@ -113,10 +113,10 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			if wc, ok := mp.(adapter.WithMatchPluginCore); ok {
 				wc.WithCore(core)
 			}
-			if mp, ok := mp.(MountMatchPlugin); ok {
-				core.apiServer.MountMatchPlugin(mp)
+			if mp, ok := mp.(MountAPIMatchPlugin); ok {
+				core.apiServer.MountAPIMatchPlugin(mp)
 			}
-			if ms, ok := mp.(adapter.WithMatchPluginStatisticAPIHandler); ok {
+			if ms, ok := mp.(MountStatisticAPIMatchPlugin); ok {
 				core.apiServer.MountMatchStatisticPlugin(ms)
 			}
 			core.matchPlugins[m.Tag] = mp
@@ -149,10 +149,10 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 			if wc, ok := ep.(adapter.WithExecPluginCore); ok {
 				wc.WithCore(core)
 			}
-			if mp, ok := ep.(MountExecPlugin); ok {
-				core.apiServer.MountExecPlugin(mp)
+			if mp, ok := ep.(MountAPIExecPlugin); ok {
+				core.apiServer.MountAPIExecPlugin(mp)
 			}
-			if ms, ok := ep.(adapter.WithExecPluginStatisticAPIHandler); ok {
+			if ms, ok := ep.(MountStatisticAPIExecPlugin); ok {
 				core.apiServer.MountExecStatisticPlugin(ms)
 			}
 			core.execPlugins[e.Tag] = ep
