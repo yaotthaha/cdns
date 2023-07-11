@@ -304,13 +304,16 @@ func (a *APIServer) statisticHandler() http.Handler {
 	})
 	if a.matchPluginStatisticMap.Len() > 0 {
 		chiRouter.Get("/plugin/match", func(w http.ResponseWriter, r *http.Request) {
-			matchPluginTags := make([]string, 0)
+			matchPlugins := make([]map[string]any, 0)
 			a.matchPluginStatisticMap.Range(func(_ adapter.MatchPlugin, value adapter.WithMatchPluginStatisticAPIHandler) bool {
-				matchPluginTags = append(matchPluginTags, value.Tag())
+				matchPlugins = append(matchPlugins, map[string]any{
+					"tag":  value.Tag(),
+					"type": value.Type(),
+				})
 				return true
 			})
 			data := map[string]any{
-				"plugins": matchPluginTags,
+				"plugins": matchPlugins,
 			}
 			rawData, err := json.Marshal(data)
 			if err != nil {
@@ -342,13 +345,16 @@ func (a *APIServer) statisticHandler() http.Handler {
 	}
 	if a.execPluginStatisticMap.Len() > 0 {
 		chiRouter.Get("/plugin/exec", func(w http.ResponseWriter, r *http.Request) {
-			execPluginTags := make([]string, 0)
+			execPlugins := make([]map[string]any, 0)
 			a.execPluginStatisticMap.Range(func(_ adapter.ExecPlugin, value adapter.WithExecPluginStatisticAPIHandler) bool {
-				execPluginTags = append(execPluginTags, value.Tag())
+				execPlugins = append(execPlugins, map[string]any{
+					"tag":  value.Tag(),
+					"type": value.Type(),
+				})
 				return true
 			})
 			data := map[string]any{
-				"plugins": execPluginTags,
+				"plugins": execPlugins,
 			}
 			rawData, err := json.Marshal(data)
 			if err != nil {
@@ -393,6 +399,8 @@ func (a *APIServer) getUpstreamStatisticData() map[string]any {
 	data := make(map[string]any)
 	a.upstreamStatisticMap.Range(func(key adapter.Upstream, value *upstreamStatisticData) bool {
 		data[key.Tag()] = map[string]any{
+			"tag":   key.Tag(),
+			"type":  key.Type(),
 			"total": value.Total.Load(),
 			"fail":  value.Fail.Load(),
 		}
@@ -411,6 +419,8 @@ func (a *APIServer) getUpstreamStatisticDataFromTag(upstreamTag string) map[stri
 		return nil
 	}
 	data := map[string]any{
+		"tag":   upstream.Tag(),
+		"type":  upstream.Type(),
 		"total": da.Total.Load(),
 		"fail":  da.Fail.Load(),
 	}
