@@ -141,16 +141,17 @@ func (a *APIServer) Start() error {
 			}
 			if a.enableStatistic {
 				r.Mount("/statistic", a.statisticHandler())
+				a.logger.Info(fmt.Sprintf("statistic api enabled"))
 			}
 		})
 		go func() {
 			err := a.httpServer.ListenAndServe()
 			if err != nil && err != http.ErrServerClosed {
-				a.fatalClose(fmt.Errorf("failed to start API server: %s", err))
-				a.logger.Error(fmt.Sprintf("failed to start API server: %s", err))
+				a.fatalClose(fmt.Errorf("failed to start api server: %s", err))
+				a.logger.Error(fmt.Sprintf("failed to start api server: %s", err))
 			}
 		}()
-		a.logger.Info(fmt.Sprintf("API server started at %s", a.httpServer.Addr))
+		a.logger.Info(fmt.Sprintf("api server started at %s", a.httpServer.Addr))
 	}
 	return nil
 }
@@ -277,6 +278,7 @@ func (a *APIServer) statisticHandler() http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rawData)
 	})
@@ -296,6 +298,7 @@ func (a *APIServer) statisticHandler() http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rawData)
 	})
@@ -314,6 +317,7 @@ func (a *APIServer) statisticHandler() http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(rawData)
 		})
@@ -351,6 +355,7 @@ func (a *APIServer) statisticHandler() http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(rawData)
 		})

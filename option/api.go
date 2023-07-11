@@ -1,8 +1,8 @@
 package option
 
 type APIOptions struct {
-	Listen          string `json:"listen"`
-	Secret          string `json:"secret"`
-	Debug           bool   `json:"debug"`
-	EnableStatistic bool   `json:"enable-statistic"`
+	Listen          string `yaml:"listen,omitempty"`
+	Secret          string `yaml:"secret,omitempty"`
+	Debug           bool   `yaml:"debug,omitempty"`
+	EnableStatistic bool   `yaml:"enable-statistic,omitempty"`
 }
