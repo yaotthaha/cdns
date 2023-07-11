@@ -9,12 +9,12 @@ import (
 )
 
 type Logger interface {
-	Info(...any)
-	Warn(...any)
-	Error(...any)
-	Debug(...any)
-	Fatal(...any)
-	Print(Level, ...any)
+	Info(a ...any)
+	Warn(a ...any)
+	Error(a ...any)
+	Debug(a ...any)
+	Fatal(a ...any)
+	Print(level Level, a ...any)
 }
 
 type Level string
@@ -37,12 +37,12 @@ func DisableTimestampFormatFunc(level, s string) string {
 
 type ContextLogger interface {
 	Logger
-	InfoContext(context.Context, ...any)
-	WarnContext(context.Context, ...any)
-	ErrorContext(context.Context, ...any)
-	DebugContext(context.Context, ...any)
-	FatalContext(context.Context, ...any)
-	PrintContext(context.Context, Level, ...any)
+	InfoContext(ctx context.Context, a ...any)
+	WarnContext(ctx context.Context, a ...any)
+	ErrorContext(ctx context.Context, a ...any)
+	DebugContext(ctx context.Context, a ...any)
+	FatalContext(ctx context.Context, a ...any)
+	PrintContext(ctx context.Context, level Level, a ...any)
 }
 
 type ColorLogger interface {
