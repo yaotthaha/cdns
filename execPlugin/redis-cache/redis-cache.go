@@ -20,12 +20,13 @@ import (
 )
 
 var (
-	_ adapter.ExecPlugin        = (*RedisCache)(nil)
-	_ adapter.Starter           = (*RedisCache)(nil)
-	_ adapter.Closer            = (*RedisCache)(nil)
-	_ adapter.WithContext       = (*RedisCache)(nil)
-	_ adapter.WithContextLogger = (*RedisCache)(nil)
-	_ adapter.APIHandler        = (*RedisCache)(nil)
+	_ adapter.ExecPlugin          = (*RedisCache)(nil)
+	_ adapter.Starter             = (*RedisCache)(nil)
+	_ adapter.Closer              = (*RedisCache)(nil)
+	_ adapter.WithContext         = (*RedisCache)(nil)
+	_ adapter.WithContextLogger   = (*RedisCache)(nil)
+	_ adapter.APIHandler          = (*RedisCache)(nil)
+	_ adapter.StatisticAPIHandler = (*RedisCache)(nil)
 )
 
 const PluginType = "redis-cache"
@@ -144,6 +145,19 @@ func (r *RedisCache) APIHandler() http.Handler {
 		go r.cleanCache(req.Context())
 	})
 	return chiRouter
+}
+
+func (r *RedisCache) StatisticAPIHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		result, err := r.redisClient.DBSize(req.Context()).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("{\"total\": %d}", result)))
+	})
 }
 
 func (r *RedisCache) cleanCache(ctx context.Context) {

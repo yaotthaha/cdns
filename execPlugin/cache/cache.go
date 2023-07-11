@@ -22,12 +22,13 @@ import (
 const PluginType = "cache"
 
 var (
-	_ adapter.ExecPlugin        = (*Cache)(nil)
-	_ adapter.Starter           = (*Cache)(nil)
-	_ adapter.Closer            = (*Cache)(nil)
-	_ adapter.WithContext       = (*Cache)(nil)
-	_ adapter.WithContextLogger = (*Cache)(nil)
-	_ adapter.APIHandler        = (*Cache)(nil)
+	_ adapter.ExecPlugin          = (*Cache)(nil)
+	_ adapter.Starter             = (*Cache)(nil)
+	_ adapter.Closer              = (*Cache)(nil)
+	_ adapter.WithContext         = (*Cache)(nil)
+	_ adapter.WithContextLogger   = (*Cache)(nil)
+	_ adapter.APIHandler          = (*Cache)(nil)
+	_ adapter.StatisticAPIHandler = (*Cache)(nil)
 )
 
 func init() {
@@ -154,6 +155,19 @@ func (c *Cache) APIHandler() http.Handler {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	return r
+}
+
+func (c *Cache) StatisticAPIHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cacheMap := c.cacheMap.Load()
+		if cacheMap == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("{\"total\": %d}", cacheMap.Len())))
+	})
 }
 
 func (c *Cache) cleanCache(ctx context.Context) {
