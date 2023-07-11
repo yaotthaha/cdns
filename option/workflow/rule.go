@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"fmt"
+
 	"github.com/yaotthaha/cdns/lib/types"
 )
 
@@ -45,4 +47,25 @@ type RuleExecItem struct {
 	SetTTL   *uint32                 `yaml:"set-ttl,omitempty"`
 	Clean    *bool                   `yaml:"clean,omitempty"`
 	Return   any                     `yaml:"return,omitempty"`
+}
+
+type _RuleExecItem RuleExecItem
+
+func (r *RuleExecItem) UnmarshalYAML(unmarshal func(any) error) error {
+	var stringOperate string
+	err := unmarshal(&stringOperate)
+	if err == nil {
+		switch stringOperate {
+		case "return":
+			r.Return = true
+		case "clean":
+			r.Clean = new(bool)
+			*r.Clean = true
+		default:
+			return fmt.Errorf("invalid rule exec item: %s", stringOperate)
+		}
+		return nil
+	}
+	err = unmarshal((*_RuleExecItem)(r))
+	return err
 }
