@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +14,7 @@ import (
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/matchPlugin/sing-geosite/geosite"
 
+	regexp "github.com/dlclark/regexp2"
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
@@ -139,7 +139,7 @@ func (d *domainItem) match(ctx context.Context, domain string) (string, string, 
 				case <-ctx.Done():
 					return
 				default:
-					if f.MatchString(domain) {
+					if match, err := f.MatchString(domain); err == nil && match {
 						select {
 						case resChan <- &domainItemMatch{
 							typ: "domain_regex",
@@ -373,7 +373,7 @@ func (s *SingGeoSite) loadGeoSite() (*map[string]*domainItem, error) {
 				case geosite.RuleTypeDomainKeyword:
 					dItem.keyword = append(dItem.keyword, item.Value)
 				case geosite.RuleTypeDomainRegex:
-					regex, err := regexp.Compile(item.Value)
+					regex, err := regexp.Compile(item.Value, regexp.RE2)
 					if err != nil {
 						return nil, fmt.Errorf("compile regex %s fail: %s", item.Value, err)
 					}

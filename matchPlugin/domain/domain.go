@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +16,7 @@ import (
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
+	regexp "github.com/dlclark/regexp2"
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
 	"gopkg.in/yaml.v3"
@@ -101,7 +101,7 @@ func NewDomain(tag string, args map[string]any) (adapter.MatchPlugin, error) {
 	if op.Regex != nil && len(op.Regex) > 0 {
 		regexs := make([]*regexp.Regexp, len(op.Regex))
 		for i, r := range op.Regex {
-			regex, err := regexp.Compile(r)
+			regex, err := regexp.Compile(r, regexp.RE2)
 			if err != nil {
 				return nil, fmt.Errorf("parse keyword domain %s fail: %s", r, err)
 			}
@@ -275,7 +275,7 @@ func readRules(filename string) (*rule, error) {
 		case strings.HasPrefix(line, "keyword:"):
 			ruleItem.keyword = append(ruleItem.keyword, strings.TrimSpace(strings.TrimPrefix(line, "keyword:")))
 		case strings.HasPrefix(line, "regex:"):
-			re, err := regexp.Compile(strings.TrimSpace(strings.TrimPrefix(line, "regex:")))
+			re, err := regexp.Compile(strings.TrimSpace(strings.TrimPrefix(line, "regex:")), regexp.RE2)
 			if err != nil {
 				return nil, err
 			}
@@ -353,7 +353,7 @@ func (r *rule) match(ctx context.Context, matchDomain string) (string, string, b
 				return "", "", false
 			default:
 			}
-			if regex.MatchString(matchDomain) {
+			if match, err := regex.MatchString(matchDomain); err == nil && match {
 				return "domain_regex", regex.String(), true
 			}
 		}

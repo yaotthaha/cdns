@@ -157,6 +157,24 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 	return rItem, nil
 }
 
+type matchItemFunc func(context.Context, log.ContextLogger, *matchItem, *adapter.DNSContext) int
+
+var matchItemFuncs []matchItemFunc
+
+func init() {
+	matchItemFuncs = []matchItemFunc{
+		matchMark,
+		matchQType,
+		matchQName,
+		matchHasRespMsg,
+		matchListener,
+		matchRespIP,
+		matchPluginFunc,
+		matchMatchOr,
+		matchMatchAnd,
+	}
+}
+
 func matchListener(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.listener != nil {
 		matchStr := ""
@@ -452,24 +470,8 @@ func matchMatchAnd(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 	return -1
 }
 
-type matchItemFunc func(context.Context, log.ContextLogger, *matchItem, *adapter.DNSContext) int
-
-func matchItemFuncs() []matchItemFunc {
-	return []matchItemFunc{
-		matchMark,
-		matchQType,
-		matchQName,
-		matchHasRespMsg,
-		matchListener,
-		matchRespIP,
-		matchPluginFunc,
-		matchMatchOr,
-		matchMatchAnd,
-	}
-}
-
 func (r *matchItem) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
-	for _, f := range matchItemFuncs() {
+	for _, f := range matchItemFuncs {
 		result := f(ctx, logger, r, dnsCtx)
 		if result >= 0 {
 			if result == 1 {
