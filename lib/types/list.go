@@ -38,13 +38,25 @@ func (l *List[T]) DelLast() (v T) {
 	return
 }
 
-func (l *List[T]) DelV(v T) {
+func (l *List[T]) DelHeadV(v T) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	for i, _v := range l.arr {
 		if _v == v {
 			l.arr = append(l.arr[:i], l.arr[i+1:]...)
-			return
+			break
+		}
+	}
+}
+
+func (l *List[T]) DelTailV(v T) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	for i := range l.arr {
+		_v := l.arr[len(l.arr)-1-i]
+		if _v == v {
+			l.arr = append(l.arr[:len(l.arr)-1-i], l.arr[len(l.arr)-i:]...)
+			break
 		}
 	}
 }

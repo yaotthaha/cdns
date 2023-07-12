@@ -29,21 +29,21 @@ func init() {
 }
 
 type Prefer struct {
-	tag                 string
-	ctx                 context.Context
-	logger              log.ContextLogger
-	preHookFuncPointer  *func(ctx context.Context, dnsCtx *adapter.DNSContext)
-	postHookFuncPointer *func(ctx context.Context, dnsCtx *adapter.DNSContext)
+	tag                           string
+	ctx                           context.Context
+	logger                        log.ContextLogger
+	beforeUpstreamHookFuncPointer *func(ctx context.Context, dnsCtx *adapter.DNSContext)
+	afterUpstreamHookFuncPointer  *func(ctx context.Context, dnsCtx *adapter.DNSContext)
 }
 
 func NewPrefer(tag string, _ map[string]any) (adapter.ExecPlugin, error) {
 	p := &Prefer{
 		tag: tag,
 	}
-	preHookFunc := p.PreHook
-	postHookFunc := p.PostHook
-	p.preHookFuncPointer = &preHookFunc
-	p.postHookFuncPointer = &postHookFunc
+	beforeUpstreamHookFunc := p.BeforeHook
+	afterUpstreamHookFunc := p.AfterHook
+	p.beforeUpstreamHookFuncPointer = &beforeUpstreamHookFunc
+	p.afterUpstreamHookFuncPointer = &afterUpstreamHookFunc
 	return p, nil
 }
 
@@ -84,12 +84,12 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 		return true
 	}
 	dnsCtx.MetaData.Store(MetaDataKey, types.NewCloneableValue(preferType))
-	dnsCtx.PreHook.Append((*adapter.HookFunc)(p.preHookFuncPointer))
-	dnsCtx.PostHook.Append((*adapter.HookFunc)(p.postHookFuncPointer))
+	dnsCtx.BeforeUpstreamHook.Append((*adapter.BeforeUpstreamHookFunc)(p.beforeUpstreamHookFuncPointer))
+	dnsCtx.AfterUpstreamHook.Append((*adapter.AfterUpstreamHookFunc)(p.afterUpstreamHookFuncPointer))
 	return true
 }
 
-func (p *Prefer) PreHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
+func (p *Prefer) BeforeHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 	var _type uint16
 	if dnsCtx.ReqMsg.Question[0].Qtype != dns.TypeA && dnsCtx.ReqMsg.Question[0].Qtype != dns.TypeAAAA {
 		return
@@ -109,7 +109,7 @@ func (p *Prefer) PreHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 			ReqMsg: newMsg,
 		})
 		p.logger.DebugContext(ctx, "prefer AAAA")
-		dnsCtx.PreHook.DelV((*adapter.HookFunc)(p.preHookFuncPointer))
+		dnsCtx.BeforeUpstreamHook.DelTailV((*adapter.BeforeUpstreamHookFunc)(p.beforeUpstreamHookFuncPointer))
 	}
 	if _type == dns.TypeAAAA && prefer == dns.TypeA {
 		newMsg := new(dns.Msg)
@@ -119,11 +119,11 @@ func (p *Prefer) PreHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 			ReqMsg: newMsg,
 		})
 		p.logger.DebugContext(ctx, "prefer A")
-		dnsCtx.PreHook.DelV((*adapter.HookFunc)(p.preHookFuncPointer))
+		dnsCtx.BeforeUpstreamHook.DelTailV((*adapter.BeforeUpstreamHookFunc)(p.beforeUpstreamHookFuncPointer))
 	}
 }
 
-func (p *Prefer) PostHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
+func (p *Prefer) AfterHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 	var _type uint16
 	if dnsCtx.ReqMsg.Question[0].Qtype != dns.TypeA && dnsCtx.ReqMsg.Question[0].Qtype != dns.TypeAAAA {
 		return
@@ -173,7 +173,7 @@ func (p *Prefer) PostHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 			newRespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 			dnsCtx.RespMsg = newRespMsg
 			p.logger.DebugContext(ctx, "prefer AAAA, remove answer")
-			dnsCtx.PostHook.DelV((*adapter.HookFunc)(p.postHookFuncPointer))
+			dnsCtx.AfterUpstreamHook.DelTailV((*adapter.AfterUpstreamHookFunc)(p.afterUpstreamHookFuncPointer))
 		}
 	}
 	if prefer == dns.TypeA && _type == dns.TypeAAAA && extraDNSMsg.RespMsg != nil {
@@ -204,7 +204,7 @@ func (p *Prefer) PostHook(ctx context.Context, dnsCtx *adapter.DNSContext) {
 			newRespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 			dnsCtx.RespMsg = newRespMsg
 			p.logger.DebugContext(ctx, "prefer A, remove answer")
-			dnsCtx.PostHook.DelV((*adapter.HookFunc)(p.postHookFuncPointer))
+			dnsCtx.AfterUpstreamHook.DelTailV((*adapter.AfterUpstreamHookFunc)(p.afterUpstreamHookFuncPointer))
 		}
 	}
 }

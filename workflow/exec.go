@@ -108,13 +108,13 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		dnsCtx.Mark = *e.setMark
 	}
 	if e.upstream != nil {
-		if dnsCtx.PreHook.Len() > 0 {
-			preHookFuncList := make([]*adapter.HookFunc, 0)
-			dnsCtx.PreHook.Range(func(_ int, hookFunc *adapter.HookFunc) bool {
-				preHookFuncList = append(preHookFuncList, hookFunc)
+		if dnsCtx.BeforeUpstreamHook.Len() > 0 {
+			beforeHookFuncList := make([]*adapter.BeforeUpstreamHookFunc, 0)
+			dnsCtx.BeforeUpstreamHook.Range(func(_ int, hookFunc *adapter.BeforeUpstreamHookFunc) bool {
+				beforeHookFuncList = append(beforeHookFuncList, hookFunc)
 				return true
 			})
-			for _, hookFunc := range preHookFuncList {
+			for _, hookFunc := range beforeHookFuncList {
 				if hookFunc != nil {
 					(*hookFunc)(ctx, dnsCtx)
 				}
@@ -164,13 +164,13 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 			}
 		}
 		dnsCtx.RespMsg = respQueue[len(respQueue)-1]
-		if dnsCtx.PostHook.Len() > 0 {
-			postHookFuncList := make([]*adapter.HookFunc, 0)
-			dnsCtx.PostHook.Range(func(_ int, hookFunc *adapter.HookFunc) bool {
-				postHookFuncList = append(postHookFuncList, hookFunc)
+		if dnsCtx.AfterUpstreamHook.Len() > 0 {
+			afterHookFuncList := make([]*adapter.AfterUpstreamHookFunc, 0)
+			dnsCtx.AfterUpstreamHook.Range(func(_ int, hookFunc *adapter.AfterUpstreamHookFunc) bool {
+				afterHookFuncList = append(afterHookFuncList, hookFunc)
 				return true
 			})
-			for _, hookFunc := range postHookFuncList {
+			for _, hookFunc := range afterHookFuncList {
 				if hookFunc != nil {
 					(*hookFunc)(ctx, dnsCtx)
 				}
