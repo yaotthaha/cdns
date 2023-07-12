@@ -20,15 +20,23 @@ type IPSetLinux struct {
 
 var ErrInetMismatch = errors.New("ipset: address family mismatch")
 
-func New(name string, typ InetType) (*IPSetLinux, error) {
+func New(name string, typ InetType, timeout time.Duration) (*IPSetLinux, error) {
 	handler, err := netlink.NewHandle()
 	if err != nil {
 		return nil, err
 	}
-	err = handler.IpsetCreate(name, "hash:net", netlink.IpsetCreateOptions{
-		Replace: true,
-		Skbinfo: true,
-	})
+	createOptions := netlink.IpsetCreateOptions{
+		Replace:  true,
+		Skbinfo:  true,
+		Revision: 1,
+	}
+	createOptions.Timeout = new(uint32)
+	if timeout <= 0 {
+		*createOptions.Timeout = 0
+	} else {
+		*createOptions.Timeout = uint32(timeout.Seconds())
+	}
+	err = handler.IpsetCreate(name, "hash:net", createOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +52,7 @@ func (i *IPSetLinux) Name() string {
 }
 
 func (i *IPSetLinux) Close() error {
+	i.handler.IpsetDestroy(i.name)
 	i.handler.Close()
 	return nil
 }

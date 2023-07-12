@@ -66,6 +66,18 @@ func NewIPSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	if i.option.Name4 == "" && i.option.Name6 == "" {
 		return nil, fmt.Errorf("empty args")
 	}
+	if i.option.Mask4 == 0 {
+		i.option.Mask4 = 32
+	}
+	if i.option.Mask6 == 0 {
+		i.option.Mask6 = 128
+	}
+	if i.option.TTL4 == 0 {
+		i.option.TTL4 = types.TimeDuration(2 * time.Hour)
+	}
+	if i.option.TTL6 == 0 {
+		i.option.TTL6 = types.TimeDuration(2 * time.Hour)
+	}
 
 	return i, nil
 }
@@ -80,14 +92,14 @@ func (i *IPSet) Type() string {
 
 func (i *IPSet) Start() error {
 	if i.option.Name4 != "" {
-		ipset4, err := internal.New(i.option.Name4, internal.Inet4)
+		ipset4, err := internal.New(i.option.Name4, internal.Inet4, time.Duration(i.option.TTL4))
 		if err != nil {
 			return fmt.Errorf("create ipset4 fail: %s", err)
 		}
 		i.ipset4 = ipset4
 	}
 	if i.option.Name6 != "" {
-		ipset6, err := internal.New(i.option.Name6, internal.Inet6)
+		ipset6, err := internal.New(i.option.Name6, internal.Inet6, time.Duration(i.option.TTL6))
 		if err != nil {
 			return fmt.Errorf("create ipset6 fail: %s", err)
 		}
@@ -206,21 +218,12 @@ func (i *IPSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSC
 			if i.option.TTL4 > 0 {
 				ttl = time.Duration(i.option.TTL4)
 			}
-			if i.option.Mask4 > 0 {
-				cidr := netip.PrefixFrom(rr.addr, int(i.option.Mask4)).Masked()
-				err := i.ipset4.AddCIDR(cidr, ttl)
-				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to %s fail: %s", cidr.String(), i.ipset4.Name(), err))
-				} else {
-					i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to %s, ttl: %s", cidr.String(), i.ipset4.Name(), ttl.String()))
-				}
+			prefix := netip.PrefixFrom(rr.addr, int(i.option.Mask4)).Masked()
+			err := i.ipset4.AddCIDR(prefix, ttl)
+			if err != nil {
+				i.logger.ErrorContext(ctx, fmt.Sprintf("add addr %s to %s fail: %s", prefix.String(), i.ipset4.Name(), err))
 			} else {
-				err := i.ipset4.AddIP(rr.addr, ttl)
-				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to %s fail: %s", rr.addr.String(), i.ipset4.Name(), err))
-				} else {
-					i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to %s, ttl: %s", rr.addr.String(), i.ipset4.Name(), ttl.String()))
-				}
+				i.logger.DebugContext(ctx, fmt.Sprintf("add addr %s to %s, ttl: %s", prefix.String(), i.ipset4.Name(), ttl.String()))
 			}
 		}
 	}
@@ -230,21 +233,12 @@ func (i *IPSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSC
 			if i.option.TTL6 > 0 {
 				ttl = time.Duration(i.option.TTL6)
 			}
-			if i.option.Mask6 > 0 {
-				cidr := netip.PrefixFrom(rr.addr, int(i.option.Mask6)).Masked()
-				err := i.ipset6.AddCIDR(cidr, ttl)
-				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add cidr %s to %s fail: %s", cidr.String(), i.ipset6.Name(), err))
-				} else {
-					i.logger.DebugContext(ctx, fmt.Sprintf("add cidr %s to %s, ttl: %s", cidr.String(), i.ipset6.Name(), ttl.String()))
-				}
+			prefix := netip.PrefixFrom(rr.addr, int(i.option.Mask6))
+			err := i.ipset6.AddCIDR(prefix, ttl)
+			if err != nil {
+				i.logger.ErrorContext(ctx, fmt.Sprintf("add addr %s to %s fail: %s", prefix.String(), i.ipset6.Name(), err))
 			} else {
-				err := i.ipset6.AddIP(rr.addr, ttl)
-				if err != nil {
-					i.logger.ErrorContext(ctx, fmt.Sprintf("add ip %s to %s fail: %s", rr.addr.String(), i.ipset6.Name(), err))
-				} else {
-					i.logger.DebugContext(ctx, fmt.Sprintf("add ip %s to %s, ttl: %s", rr.addr.String(), i.ipset6.Name(), ttl.String()))
-				}
+				i.logger.DebugContext(ctx, fmt.Sprintf("add addr %s to %s, ttl: %s", prefix.String(), i.ipset6.Name(), ttl.String()))
 			}
 		}
 	}

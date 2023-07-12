@@ -12,7 +12,7 @@ var ErrOSNotSupported = errors.New("ipset: OS not supported")
 
 type IPSetOther struct{}
 
-func New(_ string, _ InetType) (*IPSetOther, error) {
+func New(_ string, _ InetType, _ time.Duration) (*IPSetOther, error) {
 	return nil, ErrOSNotSupported
 }
 
