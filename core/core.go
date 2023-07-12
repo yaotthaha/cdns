@@ -195,7 +195,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		}
 		tagLogger := log.NewTagLogger(logger, fmt.Sprintf("listener/%s", l.Tag))
 		if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
-			clogger.SetColor(color.FgBlue)
+			clogger.SetColor(color.FgCyan)
 		}
 		logger := log.NewContextLogger(tagLogger)
 		ler, err := listener.NewListener(ctx, core, logger, l)
