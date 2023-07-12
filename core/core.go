@@ -66,7 +66,7 @@ func New(ctx context.Context, logger log.Logger, options option.Option) (adapter
 		if _, ok := core.upstreams[u.Tag]; ok {
 			return nil, fmt.Errorf("init upstream fail: tag %s duplicated", u.Tag)
 		}
-		tagLogger := log.NewTagLogger(core.logger, fmt.Sprintf("upstream/%s", u.Tag))
+		tagLogger := log.NewTagLogger(logger, fmt.Sprintf("upstream/%s", u.Tag))
 		if clogger, isSetColorLogger := tagLogger.(log.SetColorLogger); isSetColorLogger {
 			clogger.SetColor(color.FgCyan)
 		}
