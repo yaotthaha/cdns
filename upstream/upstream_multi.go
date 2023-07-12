@@ -138,7 +138,7 @@ func (u *multiUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.
 		go func(upstream adapter.Upstream) {
 			defer wg.Done()
 			u.logger.DebugContext(ctx, fmt.Sprintf("multi forward to %s", upstream.Tag()))
-			respMsg, err := Exchange(ctx, upstream, dnsCtx, dnsMsg)
+			respMsg, err := Exchange(ctx, upstream, dnsCtx, dnsMsg.Copy())
 			if err == nil {
 				saveResult.CompareAndSwap(nil, respMsg)
 				cancel()
