@@ -39,10 +39,11 @@ type Script struct {
 }
 
 type option struct {
-	Cmd     string                 `yaml:cmd`
-	Args    types.Listable[string] `yaml:args`
-	Env     map[string]string      `yaml:env`
-	Timeout types.TimeDuration     `yaml:timeout`
+	Cmd         string                 `yaml:cmd`
+	Args        types.Listable[string] `yaml:args`
+	Env         map[string]string      `yaml:env`
+	Timeout     types.TimeDuration     `yaml:timeout`
+	EnableCache bool                   `yaml:enable-cache`
 }
 
 func NewScript(tag string, args map[string]any) (adapter.MatchPlugin, error) {
@@ -123,6 +124,9 @@ func (s *Script) runWrapper(ctx context.Context) (string, error) {
 }
 
 func (s *Script) runOrReadCache(ctx context.Context) (string, error) {
+	if !s.option.EnableCache {
+		return s.runWrapper(ctx)
+	}
 	strPointer := s.cache.Load()
 	if strPointer == nil {
 		str, err := s.runWrapper(ctx)
@@ -150,11 +154,13 @@ func (s *Script) keepRun() {
 }
 
 func (s *Script) Start() error {
-	_, err := s.runOrReadCache(s.ctx)
-	if err != nil {
-		return err
+	if s.option.EnableCache {
+		_, err := s.runOrReadCache(s.ctx)
+		if err != nil {
+			return err
+		}
+		go s.keepRun()
 	}
-	go s.keepRun()
 	return nil
 }
 
