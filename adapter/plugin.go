@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"sync"
 
 	"github.com/yaotthaha/cdns/constant"
@@ -82,6 +83,9 @@ func GetAllMatchPlugin() []string {
 	for k := range matchPluginMap {
 		ret = append(ret, k)
 	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i] < ret[j]
+	})
 	return ret
 }
 
@@ -107,5 +111,8 @@ func GetAllExecPlugin() []string {
 	for k := range execPluginMap {
 		ret = append(ret, k)
 	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i] < ret[j]
+	})
 	return ret
 }
