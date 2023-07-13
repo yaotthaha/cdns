@@ -29,6 +29,7 @@ func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 			var (
 				haveMatchOr  bool
 				haveMatchAnd bool
+				haveElseExec bool
 				haveExec     bool
 			)
 			for k := range v {
@@ -37,15 +38,17 @@ func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 					haveMatchOr = true
 				case k == "match-and":
 					haveMatchAnd = true
+				case k == "else-exec":
+					haveElseExec = true
 				case k == "exec":
 					haveExec = true
 				}
 			}
 			var r any
 			switch {
-			case haveMatchOr && haveExec:
+			case haveMatchOr && (haveElseExec || haveExec):
 				r = &RuleMatchOr{}
-			case haveMatchAnd && haveExec:
+			case haveMatchAnd && (haveElseExec || haveExec):
 				r = &RuleMatchAnd{}
 			case haveExec:
 				r = &RuleExec{}
