@@ -165,3 +165,13 @@ func (u *multiUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.
 	}
 	return nil, err
 }
+
+func (u *multiUpstream) IsUpstreamGroup() {}
+
+func (u *multiUpstream) NowUpstream() adapter.Upstream {
+	return nil
+}
+
+func (u *multiUpstream) AllUpstreams() []adapter.Upstream {
+	return u.upstreams
+}

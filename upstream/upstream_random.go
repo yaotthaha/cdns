@@ -95,3 +95,15 @@ func (u *randomUpstream) ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns
 	u.logger.InfoContext(ctx, fmt.Sprintf("forward to %s", up.Tag()))
 	return Exchange(ctx, up, dnsCtx, dnsMsg)
 }
+
+func (u *randomUpstream) IsUpstreamGroup() {}
+
+func (u *randomUpstream) NowUpstream() adapter.Upstream {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	up := u.upstreams[r.Intn(len(u.upstreams))]
+	return up
+}
+
+func (u *randomUpstream) AllUpstreams() []adapter.Upstream {
+	return u.upstreams
+}

@@ -20,3 +20,10 @@ type UpstreamExchangeWithDNSContext interface {
 	Upstream
 	ExchangeWithDNSContext(ctx context.Context, dnsMsg *dns.Msg, dnsCtx *DNSContext) (*dns.Msg, error)
 }
+
+type UpstreamGroup interface {
+	Upstream
+	IsUpstreamGroup()
+	NowUpstream() Upstream
+	AllUpstreams() []Upstream
+}

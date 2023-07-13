@@ -32,6 +32,11 @@ type queryTestUpstream struct {
 	testLock     sync.Mutex
 }
 
+type testResult struct {
+	time  time.Time
+	delay time.Duration
+}
+
 const (
 	testInterval = 10 * time.Second
 	testDomain   = "www.example.com"
@@ -136,7 +141,9 @@ func (u *queryTestUpstream) test() {
 			defer cancel()
 			upstream.ContextLogger().Debug(fmt.Sprintf("querytest upstream [%s] test", u.tag))
 			start := time.Now()
-			_, err := upstream.Exchange(ctx, u.newDNSMsg())
+			d := new(dns.Msg)
+			d.SetQuestion(dns.Fqdn(u.testDomain), dns.TypeA)
+			_, err := upstream.Exchange(ctx, d)
 			delay := time.Since(start)
 			if err == nil {
 				p.Store(&testResult{
@@ -188,13 +195,12 @@ func (u *queryTestUpstream) getBestUpstream() adapter.Upstream {
 	return bestUpstream
 }
 
-type testResult struct {
-	time  time.Time
-	delay time.Duration
+func (u *queryTestUpstream) IsUpstreamGroup() {}
+
+func (u *queryTestUpstream) NowUpstream() adapter.Upstream {
+	return u.getBestUpstream()
 }
 
-func (u *queryTestUpstream) newDNSMsg() *dns.Msg {
-	d := new(dns.Msg)
-	d.SetQuestion(dns.Fqdn(u.testDomain), dns.TypeA)
-	return d
+func (u *queryTestUpstream) AllUpstreams() []adapter.Upstream {
+	return u.upstreams
 }
