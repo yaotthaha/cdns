@@ -10,12 +10,12 @@ import (
 
 type Core interface {
 	Run() error
-	Handle(context.Context, log.ContextLogger, Workflow, *DNSContext) (context.Context, *dns.Msg)
-	GetUpstream(string) Upstream
+	Handle(ctx context.Context, logger log.ContextLogger, workflow Workflow, dnsCtx *DNSContext) (context.Context, *dns.Msg)
+	GetUpstream(tag string) Upstream
 	ListUpstream() []Upstream
-	GetWorkflow(string) Workflow
-	GetMatchPlugin(string) MatchPlugin
-	GetExecPlugin(string) ExecPlugin
+	GetWorkflow(tag string) Workflow
+	GetMatchPlugin(tag string) MatchPlugin
+	GetExecPlugin(tag string) ExecPlugin
 }
 
 type WithCore interface {

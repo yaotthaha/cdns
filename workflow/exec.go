@@ -231,7 +231,7 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		}
 		logger.DebugContext(ctx, fmt.Sprintf("go to => %s", *e.goTo))
 		w.Exec(ctx, dnsCtx)
-		return constant.ReturnOnce
+		return constant.ReturnAll
 	}
 	if e.setTTL != nil {
 		if *e.setTTL > 0 && dnsCtx.RespMsg != nil {

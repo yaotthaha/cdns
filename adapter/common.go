@@ -15,13 +15,13 @@ type Closer interface {
 }
 
 type WithContext interface {
-	WithContext(context.Context)
+	WithContext(ctx context.Context)
 }
 
 type WithLogger interface {
-	WithLogger(log.Logger)
+	WithLogger(logger log.Logger)
 }
 
 type WithContextLogger interface {
-	WithContextLogger(log.ContextLogger)
+	WithContextLogger(logger log.ContextLogger)
 }

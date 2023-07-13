@@ -8,5 +8,5 @@ import (
 
 type Workflow interface {
 	Tag() string
-	Exec(context.Context, *DNSContext) (returnMode constant.ReturnMode)
+	Exec(ctx context.Context, dnsCtx *DNSContext) constant.ReturnMode
 }

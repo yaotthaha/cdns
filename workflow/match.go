@@ -14,6 +14,21 @@ import (
 	"github.com/miekg/dns"
 )
 
+const (
+	matchTypeListener   = "listener"
+	matchTypeClientIP   = "client-ip"
+	matchTypeQType      = "qtype"
+	matchTypeQName      = "qname"
+	matchTypeHasRespMsg = "has-resp-msg"
+	matchTypeRespIP     = "resp-ip"
+	matchTypeMark       = "mark"
+	matchTypeEnv        = "env"
+	matchTypeMetadata   = "metadata"
+	matchTypePlugin     = "plugin"
+	matchTypeMatchOr    = "match-or"
+	matchTypeMatchAnd   = "match-and"
+)
+
 type matchItem struct {
 	listener   []string
 	clientIP   []any
@@ -27,7 +42,9 @@ type matchItem struct {
 	plugin     *matchPlugin
 	matchOr    []*matchItem
 	matchAnd   []*matchItem
-	invert     bool
+
+	invert    bool
+	matchType string
 }
 
 type matchPlugin struct {
@@ -46,6 +63,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for i, listener := range options.Listener {
 			rItem.listener[i] = listener
 		}
+		rItem.matchType = matchTypeListener
 		rn++
 	}
 
@@ -64,6 +82,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 			}
 			return nil, fmt.Errorf("invalid client-ip %s", addrStr)
 		}
+		rItem.matchType = matchTypeClientIP
 		rn++
 	}
 
@@ -72,6 +91,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for _, qType := range options.QType {
 			rItem.qType = append(rItem.qType, uint16(qType))
 		}
+		rItem.matchType = matchTypeQType
 		rn++
 	}
 
@@ -80,11 +100,13 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for _, qName := range options.QName {
 			rItem.qName = append(rItem.qName, qName)
 		}
+		rItem.matchType = matchTypeQName
 		rn++
 	}
 
 	if options.HasRespMsg != nil {
 		rItem.hasRespMsg = options.HasRespMsg
+		rItem.matchType = matchTypeHasRespMsg
 		rn++
 	}
 
@@ -103,6 +125,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 			}
 			return nil, fmt.Errorf("invalid resp-ip %s", addrStr)
 		}
+		rItem.matchType = matchTypeRespIP
 		rn++
 	}
 
@@ -111,6 +134,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for i, mark := range options.Mark {
 			rItem.mark[i] = mark
 		}
+		rItem.matchType = matchTypeMark
 		rn++
 	}
 
@@ -119,6 +143,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for k, v := range options.Env {
 			rItem.env[k] = v
 		}
+		rItem.matchType = matchTypeEnv
 		rn++
 	}
 
@@ -127,6 +152,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		for k, v := range options.Metadata {
 			rItem.metadata[k] = v
 		}
+		rItem.matchType = matchTypeMetadata
 		rn++
 	}
 
@@ -140,6 +166,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 			args:   options.Plugin.Args,
 		}
 		rItem.plugin = matchPlugin
+		rItem.matchType = matchTypePlugin
 		rn++
 	}
 
@@ -153,6 +180,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 			matchOr = append(matchOr, rule)
 		}
 		rItem.matchOr = matchOr
+		rItem.matchType = matchTypeMatchOr
 		rn++
 	}
 
@@ -166,6 +194,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 			matchAnd = append(matchAnd, rule)
 		}
 		rItem.matchAnd = matchAnd
+		rItem.matchType = matchTypeMatchAnd
 		rn++
 	}
 
@@ -176,25 +205,7 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 	return rItem, nil
 }
 
-type matchItemFunc func(context.Context, log.ContextLogger, *matchItem, *adapter.DNSContext) int
-
-var matchItemFuncs []matchItemFunc
-
-func init() {
-	matchItemFuncs = []matchItemFunc{
-		matchMark,
-		matchEnv,
-		matchMetaData,
-		matchQType,
-		matchQName,
-		matchHasRespMsg,
-		matchListener,
-		matchRespIP,
-		matchPluginFunc,
-		matchMatchOr,
-		matchMatchAnd,
-	}
-}
+type matchFunc func(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int
 
 func matchListener(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.listener != nil {
@@ -414,7 +425,7 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 	return -1
 }
 
-func matchEnv(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
+func matchEnv(ctx context.Context, logger log.ContextLogger, r *matchItem, _ *adapter.DNSContext) int {
 	if r.env != nil {
 		match := true
 		for k := range r.env {
@@ -553,14 +564,42 @@ func matchMatchAnd(ctx context.Context, logger log.ContextLogger, r *matchItem, 
 }
 
 func (r *matchItem) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
-	for _, f := range matchItemFuncs {
-		result := f(ctx, logger, r, dnsCtx)
-		if result >= 0 {
-			if result == 1 {
-				return true
-			}
-			return false
+	var f matchFunc
+	switch r.matchType {
+	case matchTypeListener:
+		f = matchListener
+	case matchTypeClientIP:
+		f = matchClientIP
+	case matchTypeQType:
+		f = matchQType
+	case matchTypeQName:
+		f = matchQName
+	case matchTypeHasRespMsg:
+		f = matchHasRespMsg
+	case matchTypeRespIP:
+		f = matchRespIP
+	case matchTypeMark:
+		f = matchMark
+	case matchTypeEnv:
+		f = matchEnv
+	case matchTypeMetadata:
+		f = matchMetaData
+	case matchTypePlugin:
+		f = matchPluginFunc
+	case matchTypeMatchOr:
+		f = matchMatchOr
+	case matchTypeMatchAnd:
+		f = matchMatchAnd
+	default:
+		logger.ErrorContext(ctx, fmt.Sprintf("unknown match type: %s", r.matchType))
+		return false
+	}
+	result := f(ctx, logger, r, dnsCtx)
+	if result >= 0 {
+		if result == 1 {
+			return true
 		}
+		return false
 	}
 	return false
 }

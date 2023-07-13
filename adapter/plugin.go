@@ -14,26 +14,26 @@ type MatchPluginCore interface{}
 type MatchPlugin interface {
 	Tag() string
 	Type() string
-	Match(context.Context, map[string]any, *DNSContext) (match bool, err error) // true: match, false: no match
+	Match(ctx context.Context, args map[string]any, dnsCtx *DNSContext) (match bool, err error) // true: match, false: no match
 }
 
 type WithMatchPluginCore interface {
-	WithCore(MatchPluginCore)
+	WithCore(core MatchPluginCore)
 }
 
 type ExecPluginCore interface {
-	GetWorkflow(string) Workflow
-	GetUpstream(string) Upstream
+	GetWorkflow(tag string) Workflow
+	GetUpstream(tag string) Upstream
 }
 
 type ExecPlugin interface {
 	Tag() string
 	Type() string
-	Exec(context.Context, map[string]any, *DNSContext) (constant.ReturnMode, error)
+	Exec(ctx context.Context, args map[string]any, dnsCtx *DNSContext) (returnMode constant.ReturnMode, err error)
 }
 
 type WithExecPluginCore interface {
-	WithCore(ExecPluginCore)
+	WithCore(core ExecPluginCore)
 }
 
 type APIHandler interface {
