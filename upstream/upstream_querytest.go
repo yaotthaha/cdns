@@ -19,8 +19,9 @@ type queryTestUpstream struct {
 	ctx    context.Context
 	tag    string
 	logger log.ContextLogger
+	core   adapter.Core
 
-	core adapter.Core
+	closedChan chan struct{}
 
 	upstreams    []adapter.Upstream
 	upstreamTags []string
@@ -107,7 +108,14 @@ func (u *queryTestUpstream) Start() error {
 		u.upstreamMap[up] = new(atomic.Pointer[testResult])
 	}
 	u.test()
+	u.closedChan = make(chan struct{}, 1)
 	go u.keepTest()
+	return nil
+}
+
+func (u *queryTestUpstream) Close() error {
+	<-u.closedChan
+	close(u.closedChan)
 	return nil
 }
 
@@ -159,6 +167,9 @@ func (u *queryTestUpstream) test() {
 }
 
 func (u *queryTestUpstream) keepTest() {
+	defer func() {
+		u.closedChan <- struct{}{}
+	}()
 	ticker := time.NewTicker(u.testInterval)
 	defer ticker.Stop()
 	for {

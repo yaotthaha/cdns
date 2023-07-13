@@ -25,6 +25,7 @@ func init() {
 var (
 	_ adapter.MatchPlugin       = (*Script)(nil)
 	_ adapter.Starter           = (*Script)(nil)
+	_ adapter.Closer            = (*Script)(nil)
 	_ adapter.WithContext       = (*Script)(nil)
 	_ adapter.WithContextLogger = (*Script)(nil)
 )
@@ -33,6 +34,8 @@ type Script struct {
 	tag    string
 	ctx    context.Context
 	logger log.ContextLogger
+
+	closedChan chan struct{}
 
 	option option
 	cache  types.AtomicValue[*string]
@@ -141,6 +144,9 @@ func (s *Script) runOrReadCache(ctx context.Context) (string, error) {
 }
 
 func (s *Script) keepRun() {
+	defer func() {
+		s.closedChan <- struct{}{}
+	}()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -159,7 +165,16 @@ func (s *Script) Start() error {
 		if err != nil {
 			return err
 		}
+		s.closedChan = make(chan struct{}, 1)
 		go s.keepRun()
+	}
+	return nil
+}
+
+func (s *Script) Close() error {
+	if s.option.EnableCache {
+		<-s.closedChan
+		close(s.closedChan)
 	}
 	return nil
 }

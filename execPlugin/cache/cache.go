@@ -37,9 +37,12 @@ func init() {
 }
 
 type Cache struct {
-	tag          string
-	ctx          context.Context
-	logger       log.ContextLogger
+	tag    string
+	ctx    context.Context
+	logger log.ContextLogger
+
+	closedChan chan struct{}
+
 	cleanLock    sync.Mutex
 	maxSize      uint64
 	dumpFile     string
@@ -115,6 +118,7 @@ func (c *Cache) Start() error {
 		c.cacheMap.Store(cacheMap)
 	}
 	if c.dumpInterval > 0 {
+		c.closedChan = make(chan struct{}, 1)
 		go c.dump()
 	}
 	return nil
@@ -130,6 +134,10 @@ func (c *Cache) Close() error {
 			}
 			c.dumpLock.Unlock()
 		}
+	}
+	if c.dumpInterval > 0 {
+		c.closedChan <- struct{}{}
+		close(c.closedChan)
 	}
 	return nil
 }
@@ -279,6 +287,9 @@ func (c *Cache) saveToFile(cacheMap *cachemap.CacheMap) error {
 }
 
 func (c *Cache) dump() {
+	defer func() {
+		c.closedChan <- struct{}{}
+	}()
 	ticker := time.NewTicker(c.dumpInterval)
 	defer ticker.Stop()
 	for {
