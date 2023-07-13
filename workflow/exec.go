@@ -9,6 +9,7 @@ import (
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/tools"
+	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
 	"github.com/yaotthaha/cdns/upstream"
@@ -17,15 +18,16 @@ import (
 )
 
 type execItem struct {
-	core     adapter.Core
-	setMark  *uint64
-	upstream *string
-	plugin   *execPlugin
-	jumpTo   []string
-	goTo     *string
-	setTTL   *uint32
-	clean    *bool
-	reTurn   any
+	core        adapter.Core
+	setMark     *uint64
+	setMetaData map[string]string
+	upstream    *string
+	plugin      *execPlugin
+	jumpTo      []string
+	goTo        *string
+	setTTL      *uint32
+	clean       *bool
+	reTurn      any
 }
 
 type execPlugin struct {
@@ -41,6 +43,14 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 
 	if options.Mark != nil {
 		eItem.setMark = options.Mark
+		rn++
+	}
+
+	if options.Metadata != nil && len(options.Metadata) > 0 {
+		eItem.setMetaData = make(map[string]string)
+		for k, v := range options.Metadata {
+			eItem.setMetaData[k] = v
+		}
 		rn++
 	}
 
@@ -107,6 +117,17 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 	if e.setMark != nil {
 		logger.DebugContext(ctx, fmt.Sprintf("set mark: %d ==> %d", dnsCtx.Mark, *e.setMark))
 		dnsCtx.Mark = *e.setMark
+	}
+	if e.setMetaData != nil {
+		for k, v := range e.setMetaData {
+			if v == "" {
+				dnsCtx.MetaData.Delete("user-" + k)
+				v = "<nil>"
+			} else {
+				dnsCtx.MetaData.Store("user-"+k, types.NewCloneableValue[string](v))
+			}
+			logger.DebugContext(ctx, fmt.Sprintf("set metadata: %s ==> %s", k, v))
+		}
 	}
 	if e.upstream != nil {
 		if dnsCtx.BeforeUpstreamHook.Len() > 0 {

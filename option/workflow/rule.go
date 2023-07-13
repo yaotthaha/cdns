@@ -30,6 +30,7 @@ type RuleMatchItem struct {
 	HasRespMsg *bool                          `yaml:"has-resp-msg,omitempty"`
 	RespIP     types.Listable[string]         `yaml:"resp-ip,omitempty"`
 	Mark       types.Listable[uint64]         `yaml:"mark,omitempty"`
+	Metadata   map[string]string              `yaml:"metadata,omitempty"`
 	Plugin     *RuleMatchPluginOption         `yaml:"plugin,omitempty"`
 	//
 	MatchOr  types.Listable[RuleMatchItem] `yaml:"match-or,omitempty"`
@@ -40,6 +41,7 @@ type RuleMatchItem struct {
 
 type RuleExecItem struct {
 	Mark     *uint64                 `yaml:"mark,omitempty"`
+	Metadata map[string]string       `yaml:"metadata,omitempty"`
 	Plugin   *RuleExecPluginOption   `yaml:"plugin,omitempty"`
 	Upstream *string                 `yaml:"upstream,omitempty"`
 	JumpTo   *types.Listable[string] `yaml:"jump-to,omitempty"`

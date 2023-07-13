@@ -21,6 +21,7 @@ type matchItem struct {
 	hasRespMsg *bool
 	respIP     []any
 	mark       []uint64
+	metadata   map[string]string
 	plugin     *matchPlugin
 	matchOr    []*matchItem
 	matchAnd   []*matchItem
@@ -111,6 +112,14 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		rn++
 	}
 
+	if options.Metadata != nil && len(options.Metadata) > 0 {
+		rItem.metadata = make(map[string]string)
+		for k, v := range options.Metadata {
+			rItem.metadata[k] = v
+		}
+		rn++
+	}
+
 	if options.Plugin != nil {
 		plugin := core.GetMatchPlugin(options.Plugin.Tag)
 		if plugin == nil {
@@ -164,6 +173,7 @@ var matchItemFuncs []matchItemFunc
 func init() {
 	matchItemFuncs = []matchItemFunc{
 		matchMark,
+		matchMetaData,
 		matchQType,
 		matchQName,
 		matchHasRespMsg,
@@ -387,6 +397,37 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 			return 0
 		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: mark => %s", matchStr))
+			return 1
+		}
+	}
+	return -1
+}
+
+func matchMetaData(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
+	if r.metadata != nil && dnsCtx.MetaData.Len() > 0 {
+		match := true
+		for k := range r.metadata {
+			vAny, ok := dnsCtx.MetaData.Load("user-" + k)
+			var v string
+			if ok {
+				v = vAny.Value().(string)
+			}
+			if !ok || r.metadata[k] != v {
+				match = false
+				break
+			}
+		}
+		if !match && r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): metadata => %s", r.metadata))
+			return 1
+		} else if match && r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("match(invert): metadata => %s", r.metadata))
+			return 0
+		} else if !match && !r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match: metadata => %s", r.metadata))
+			return 0
+		} else {
+			logger.DebugContext(ctx, fmt.Sprintf("match: metadata => %s", r.metadata))
 			return 1
 		}
 	}
