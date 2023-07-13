@@ -218,18 +218,18 @@ func (d *Domain) reloadFileRule(ctx context.Context) {
 	}
 }
 
-func (d *Domain) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (d *Domain) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
 	insideRule := d.insideRule.Load()
 	if insideRule != nil {
 		matchType, matchRule, match := insideRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)
 		if match {
 			d.logger.DebugContext(ctx, fmt.Sprintf("match %s ==> %s", matchType, matchRule))
-			return true
+			return true, nil
 		}
 	}
 	select {
 	case <-ctx.Done():
-		return false
+		return false, context.Canceled
 	default:
 	}
 	fileRule := d.fileRule.Load()
@@ -237,10 +237,10 @@ func (d *Domain) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DN
 		matchType, matchRule, match := fileRule.match(ctx, dnsCtx.ReqMsg.Question[0].Name)
 		if match {
 			d.logger.DebugContext(ctx, fmt.Sprintf("match %s ==> %s", matchType, matchRule))
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 type rule struct {

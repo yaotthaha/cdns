@@ -192,9 +192,9 @@ func (i *IP) reloadFileRule(ctx context.Context) {
 	}
 }
 
-func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
 	if dnsCtx.RespMsg == nil {
-		return false
+		return false, nil
 	}
 	respIP := make([]netip.Addr, 0)
 	for _, rr := range dnsCtx.RespMsg.Answer {
@@ -214,19 +214,19 @@ func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 		}
 	}
 	if len(respIP) == 0 {
-		return false
+		return false, nil
 	}
 	insideRule := i.insideRule.Load()
 	if insideRule != nil {
 		matchType, matchRule, match := insideRule.match(ctx, respIP)
 		if match {
 			i.logger.DebugContext(ctx, fmt.Sprintf("match %s: %s", matchType, matchRule))
-			return true
+			return true, nil
 		}
 	}
 	select {
 	case <-ctx.Done():
-		return false
+		return false, context.Canceled
 	default:
 	}
 	fileRule := i.fileRule.Load()
@@ -234,10 +234,10 @@ func (i *IP) Match(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 		matchType, matchRule, match := fileRule.match(ctx, respIP)
 		if match {
 			i.logger.DebugContext(ctx, fmt.Sprintf("match %s: %s", matchType, matchRule))
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 type rule struct {

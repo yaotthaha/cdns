@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/execPlugin/cache/cachemap"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
@@ -201,19 +202,19 @@ func (c *Cache) saveToFileAPI(ctx context.Context) {
 	c.logger.InfoContext(ctx, "save cache to file success, cost: %s", time.Since(startTime).String())
 }
 
-func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	cacheMap := c.cacheMap.Load()
 	if cacheMap == nil {
-		return true
+		return constant.Continue, nil
 	}
 	done := false
 	if _, ok := args["store"]; ok {
 		if dnsCtx.RespMsg == nil {
-			return true
+			return constant.Continue, nil
 		}
 		if c.maxSize > 0 {
 			if cacheMap.Len() > int(c.maxSize) {
-				return true
+				return constant.Continue, nil
 			}
 		}
 		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
@@ -233,7 +234,7 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 		dnsBytes, err := dnsCtx.RespMsg.Pack()
 		if err != nil {
 			c.logger.ErrorContext(ctx, fmt.Sprintf("pack dns msg fail: %s", err))
-			return true
+			return constant.Continue, nil
 		}
 		c.logger.InfoContext(ctx, fmt.Sprintf("cache ==> %s", key))
 		cacheMap.Set(key, dnsBytes, time.Now().Add(time.Duration(maxTTL)*time.Second))
@@ -242,16 +243,16 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
 		dnsBytesAny, _, err := cacheMap.Get(key)
 		if err != nil {
-			return true
+			return constant.Continue, nil
 		}
 		dnsBytes, ok := dnsBytesAny.([]byte)
 		if !ok {
-			return true
+			return constant.Continue, nil
 		}
 		dnsMsg := &dns.Msg{}
 		err = dnsMsg.Unpack(dnsBytes)
 		if err != nil {
-			return true
+			return constant.Continue, nil
 		}
 		dnsMsg.SetReply(dnsCtx.ReqMsg)
 		dnsCtx.RespMsg = dnsMsg
@@ -260,9 +261,9 @@ func (c *Cache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.D
 	}
 	if _, ok := args["return"]; ok && done {
 		c.logger.DebugContext(ctx, "return")
-		return false
+		return constant.ReturnAll, nil
 	}
-	return true
+	return constant.Continue, nil
 }
 
 func (c *Cache) saveToFile(cacheMap *cachemap.CacheMap) error {

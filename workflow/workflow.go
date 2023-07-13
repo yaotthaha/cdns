@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
 )
@@ -40,14 +41,20 @@ func (w *Workflow) Tag() string {
 	return w.tag
 }
 
-func (w *Workflow) Exec(ctx context.Context, dnsCtx *adapter.DNSContext) bool {
+func (w *Workflow) Exec(ctx context.Context, dnsCtx *adapter.DNSContext) constant.ReturnMode {
 	dnsCtx.UsedWorkflow.Append(w)
 	for _, r := range w.rules {
-		if !r.Exec(ctx, w.logger, dnsCtx) {
+		returnMode := r.Exec(ctx, w.logger, dnsCtx)
+		switch returnMode {
+		case constant.ReturnOnce:
 			w.logger.DebugContext(ctx, fmt.Sprintf("workflow %s return", w.tag))
-			return false
+			return constant.Continue
+		case constant.ReturnAll:
+			w.logger.DebugContext(ctx, fmt.Sprintf("workflow all return"))
+			return constant.ReturnAll
+		case constant.Continue:
 		}
 	}
 	w.logger.DebugContext(ctx, fmt.Sprintf("workflow %s return", w.tag))
-	return true
+	return constant.Continue
 }

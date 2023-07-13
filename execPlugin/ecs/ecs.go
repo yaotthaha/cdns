@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 
 	"github.com/miekg/dns"
@@ -97,7 +98,7 @@ func (e *ECS) WithContextLogger(contextLogger log.ContextLogger) {
 	e.logger = contextLogger
 }
 
-func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	reqMsg := dnsCtx.ReqMsg
 	if reqMsg.Question[0].Qtype == dns.TypeA {
 		if e.prefix4.IsValid() {
@@ -157,5 +158,5 @@ func (e *ECS) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSCon
 			e.logger.DebugContext(ctx, fmt.Sprintf("add ecs(from client-ip): ip: %s, mask: %d", dnsCtx.ClientIP.String(), 128))
 		}
 	}
-	return true
+	return constant.Continue, nil
 }

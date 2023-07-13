@@ -256,14 +256,14 @@ func (s *SingGeoSite) reloadGeoSite(ctx context.Context) {
 	s.logger.InfoContext(ctx, fmt.Sprintf("reload geosite success, cost: %s", time.Since(startTime).String()))
 }
 
-func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
 	question := dnsCtx.ReqMsg.Question[0]
 	switch question.Qtype {
 	case dns.TypeA:
 	case dns.TypeAAAA:
 	case dns.TypeCNAME:
 	default:
-		return false
+		return false, nil
 	}
 	domain := question.Name
 	if dns.IsFqdn(domain) {
@@ -271,7 +271,7 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 	}
 	codeMap := s.codeMap.Load()
 	if codeMap == nil {
-		return false
+		return false, fmt.Errorf("codemap not found")
 	}
 	codeAnyListAny, ok := args["code"]
 	if ok {
@@ -281,8 +281,9 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 			for _, codeAny := range codeAnyList {
 				code, ok := codeAny.(string)
 				if !ok {
-					s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
-					return false
+					err := fmt.Errorf("code type error: %T", args["code"])
+					s.logger.ErrorContext(ctx, err)
+					return false, err
 				}
 				codeList = append(codeList, code)
 			}
@@ -293,16 +294,17 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 						matchType, matchStr, match := dItem.match(ctx, domain)
 						if match {
 							s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geosite: code ==> %s, type ==> %s, rule ==> %s", code, matchType, matchStr))
-							return true
+							return true, nil
 						}
 						continue
 					} else {
-						s.logger.ErrorContext(ctx, fmt.Sprintf("code %s not found", code))
-						return false
+						err := fmt.Errorf("code %s not found", code)
+						s.logger.ErrorContext(ctx, err)
+						return false, err
 					}
 				}
 			}
-			return false
+			return false, nil
 		}
 		codeItem, ok := codeAnyListAny.(string)
 		if ok {
@@ -311,26 +313,28 @@ func (s *SingGeoSite) Match(ctx context.Context, args map[string]any, dnsCtx *ad
 				matchType, matchStr, match := dItem.match(ctx, domain)
 				if match {
 					s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geosite: code ==> %s, type ==> %s, rule ==> %s", codeItem, matchType, matchStr))
-					return true
+					return true, nil
 				} else {
-					return false
+					return false, nil
 				}
 			} else {
-				s.logger.ErrorContext(ctx, fmt.Sprintf("code %s not found", codeItem))
-				return false
+				err := fmt.Errorf("code %s not found", codeItem)
+				s.logger.ErrorContext(ctx, err)
+				return false, err
 			}
 		}
-		s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
-		return false
+		err := fmt.Errorf("code type error: %T", args["code"])
+		s.logger.ErrorContext(ctx, err)
+		return false, err
 	}
 	for code, dItem := range *codeMap {
 		matchType, matchStr, match := dItem.match(ctx, domain)
 		if match {
 			s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geosite: code ==> %s, type ==> %s, rule ==> %s", code, matchType, matchStr))
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (s *SingGeoSite) loadGeoSite() (*map[string]*domainItem, error) {

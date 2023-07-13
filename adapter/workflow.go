@@ -1,8 +1,12 @@
 package adapter
 
-import "context"
+import (
+	"context"
+
+	"github.com/yaotthaha/cdns/constant"
+)
 
 type Workflow interface {
 	Tag() string
-	Exec(context.Context, *DNSContext) (continueExec bool) // true: continue, false: stop
+	Exec(context.Context, *DNSContext) (returnMode constant.ReturnMode)
 }

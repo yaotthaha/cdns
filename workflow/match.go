@@ -395,7 +395,10 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 
 func matchPluginFunc(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
 	if r.plugin != nil {
-		result := r.plugin.plugin.Match(ctx, r.plugin.args, dnsCtx)
+		result, err := r.plugin.plugin.Match(ctx, r.plugin.args, dnsCtx)
+		if err != nil {
+			return -1
+		}
 		if result && r.invert {
 			logger.DebugContext(ctx, fmt.Sprintf("match(invert): plugin [%s], args: %+v", r.plugin.plugin.Tag(), r.plugin.args))
 			return 0

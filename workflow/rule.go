@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
 )
@@ -162,24 +163,25 @@ func (r *Rule) match(ctx context.Context, logger log.ContextLogger, dnsCtx *adap
 	}
 }
 
-func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
+func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) constant.ReturnMode {
 	m := r.match(ctx, logger, dnsCtx)
 	if m == -1 {
-		return false
+		return constant.ReturnAll
 	}
 	if m == 2 {
 		logger.DebugContext(ctx, "run exec")
 		for _, e := range r.execs {
 			select {
 			case <-ctx.Done():
-				return false
+				return constant.ReturnAll
 			default:
 			}
-			if !e.exec(ctx, logger, dnsCtx) {
-				return false
+			returnMode := e.exec(ctx, logger, dnsCtx)
+			if returnMode != constant.Continue {
+				return returnMode
 			}
 		}
-		return true
+		return constant.Continue
 	}
 	if m == 0 {
 		if r.elseExecs != nil {
@@ -187,17 +189,18 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 			for _, e := range r.elseExecs {
 				select {
 				case <-ctx.Done():
-					return false
+					return constant.ReturnAll
 				default:
 				}
-				if !e.exec(ctx, logger, dnsCtx) {
-					return false
+				returnMode := e.exec(ctx, logger, dnsCtx)
+				if returnMode != constant.Continue {
+					return returnMode
 				}
 			}
-			return true
+			return constant.Continue
 		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("rule no match, mode: %s, else-exec has no rule, continue", r.mode))
-			return true
+			return constant.Continue
 		}
 	}
 	if m == 1 {
@@ -206,18 +209,19 @@ func (r *Rule) Exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapt
 			for _, e := range r.execs {
 				select {
 				case <-ctx.Done():
-					return false
+					return constant.ReturnAll
 				default:
 				}
-				if !e.exec(ctx, logger, dnsCtx) {
-					return false
+				returnMode := e.exec(ctx, logger, dnsCtx)
+				if returnMode != constant.Continue {
+					return returnMode
 				}
 			}
-			return true
+			return constant.Continue
 		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("rule match success, mode: %s, exec has no rule, continue", r.mode))
-			return true
+			return constant.Continue
 		}
 	}
-	return false
+	return constant.Continue
 }

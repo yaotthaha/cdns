@@ -2,8 +2,10 @@ package prefer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
@@ -63,15 +65,16 @@ func (p *Prefer) WithContextLogger(contextLogger log.ContextLogger) {
 	p.logger = contextLogger
 }
 
-func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	preferAny, ok := args["prefer"]
 	if !ok {
-		return true
+		return constant.ReturnAll, fmt.Errorf("prefer mode not found")
 	}
 	prefer, ok := preferAny.(string)
 	if !ok {
-		p.logger.ErrorContext(ctx, "invalid prefer type")
-		return true
+		err := fmt.Errorf("invalid prefer type")
+		p.logger.ErrorContext(ctx, err)
+		return constant.ReturnAll, err
 	}
 	preferType := uint16(0)
 	switch prefer {
@@ -80,13 +83,14 @@ func (p *Prefer) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.
 	case "AAAA", "aaaa", "ipv6", "IPv6":
 		preferType = dns.TypeAAAA
 	default:
-		p.logger.ErrorContext(ctx, "invalid prefer type")
-		return true
+		err := fmt.Errorf("invalid prefer type: %s", prefer)
+		p.logger.ErrorContext(ctx, err)
+		return constant.ReturnAll, err
 	}
 	dnsCtx.MetaData.Store(MetaDataKey, types.NewCloneableValue(preferType))
 	dnsCtx.BeforeUpstreamHook.Append((*adapter.BeforeUpstreamHookFunc)(p.beforeUpstreamHookFuncPointer))
 	dnsCtx.AfterUpstreamHook.Append((*adapter.AfterUpstreamHookFunc)(p.afterUpstreamHookFuncPointer))
-	return true
+	return constant.Continue, nil
 }
 
 func (p *Prefer) BeforeHook(ctx context.Context, dnsCtx *adapter.DNSContext) {

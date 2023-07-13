@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 
 	"github.com/go-chi/chi"
@@ -174,11 +175,11 @@ func (r *RedisCache) cleanCache(ctx context.Context) {
 	r.logger.InfoContext(ctx, "clean cache done")
 }
 
-func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	done := false
 	if _, ok := args["store"]; ok {
 		if dnsCtx.RespMsg == nil {
-			return true
+			return constant.Continue, nil
 		}
 		key := dnsQuestionToString(dnsCtx.ReqMsg.Question[0])
 		var maxTTL uint32
@@ -197,14 +198,14 @@ func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		dnsBytes, err := dnsCtx.RespMsg.Pack()
 		if err != nil {
 			r.logger.ErrorContext(ctx, fmt.Sprintf("pack dns msg fail: %s", err))
-			return true
+			return constant.Continue, nil
 		}
 		dnsStr := hex.EncodeToString(dnsBytes)
 		r.logger.DebugContext(ctx, fmt.Sprintf("cache ==> %s", key))
 		err = r.redisClient.Set(ctx, key, dnsStr, time.Duration(maxTTL)*time.Second).Err()
 		if err != nil {
 			r.logger.ErrorContext(ctx, fmt.Sprintf("cache to redis fail: %s", err))
-			return true
+			return constant.Continue, nil
 		}
 		done = true
 	} else if _, ok := args["restore"]; ok {
@@ -212,19 +213,19 @@ func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 		dnsStr, err := r.redisClient.Get(ctx, key).Result()
 		if err != nil {
 			if err == redis.Nil {
-				return true
+				return constant.Continue, nil
 			}
 			r.logger.ErrorContext(ctx, fmt.Sprintf("get cache from redis fail: %s", err))
-			return true
+			return constant.Continue, nil
 		}
 		dnsBytes, err := hex.DecodeString(dnsStr)
 		if err != nil {
-			return true
+			return constant.Continue, nil
 		}
 		dnsMsg := &dns.Msg{}
 		err = dnsMsg.Unpack(dnsBytes)
 		if err != nil {
-			return true
+			return constant.Continue, nil
 		}
 		dnsMsg.SetReply(dnsCtx.ReqMsg)
 		dnsCtx.RespMsg = dnsMsg
@@ -233,9 +234,9 @@ func (r *RedisCache) Exec(ctx context.Context, args map[string]any, dnsCtx *adap
 	}
 	if _, ok := args["return"]; ok && done {
 		r.logger.DebugContext(ctx, "return")
-		return false
+		return constant.ReturnAll, nil
 	}
-	return true
+	return constant.Continue, nil
 }
 
 func dnsQuestionToString(question dns.Question) string {

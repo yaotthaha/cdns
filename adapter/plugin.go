@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/yaotthaha/cdns/constant"
 )
 
 type MatchPluginCore interface{}
@@ -12,7 +14,7 @@ type MatchPluginCore interface{}
 type MatchPlugin interface {
 	Tag() string
 	Type() string
-	Match(context.Context, map[string]any, *DNSContext) bool // true: match, false: no match
+	Match(context.Context, map[string]any, *DNSContext) (match bool, err error) // true: match, false: no match
 }
 
 type WithMatchPluginCore interface {
@@ -27,7 +29,7 @@ type ExecPluginCore interface {
 type ExecPlugin interface {
 	Tag() string
 	Type() string
-	Exec(context.Context, map[string]any, *DNSContext) bool // true: continue, false: stop
+	Exec(context.Context, map[string]any, *DNSContext) (constant.ReturnMode, error)
 }
 
 type WithExecPluginCore interface {

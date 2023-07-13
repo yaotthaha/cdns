@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/option/workflow"
@@ -102,7 +103,7 @@ func newExecItem(core adapter.Core, options workflow.RuleExecItem) (*execItem, e
 	return eItem, nil
 }
 
-func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) bool {
+func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *adapter.DNSContext) constant.ReturnMode {
 	if e.setMark != nil {
 		logger.DebugContext(ctx, fmt.Sprintf("set mark: %d ==> %d", dnsCtx.Mark, *e.setMark))
 		dnsCtx.Mark = *e.setMark
@@ -179,8 +180,12 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 	}
 	if e.plugin != nil {
 		logger.DebugContext(ctx, fmt.Sprintf("exec plugin: %s, args: %+v", e.plugin.plugin.Tag(), e.plugin.args))
-		if !e.plugin.plugin.Exec(ctx, e.plugin.args, dnsCtx) {
-			return false
+		returnMode, err := e.plugin.plugin.Exec(ctx, e.plugin.args, dnsCtx)
+		if err != nil {
+			return constant.ReturnAll
+		}
+		if returnMode != constant.Continue {
+			return returnMode
 		}
 	}
 	if e.jumpTo != nil {
@@ -188,11 +193,12 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 			w := e.core.GetWorkflow(j)
 			if w == nil {
 				logger.ErrorContext(ctx, fmt.Sprintf("workflow %s not found", j))
-				return false
+				return constant.ReturnAll
 			}
 			logger.DebugContext(ctx, fmt.Sprintf("jump to => %s", j))
-			if !w.Exec(ctx, dnsCtx) {
-				return false
+			returnMode := w.Exec(ctx, dnsCtx)
+			if returnMode != constant.Continue {
+				return returnMode
 			}
 		}
 	}
@@ -200,11 +206,11 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 		w := e.core.GetWorkflow(*e.goTo)
 		if w == nil {
 			logger.ErrorContext(ctx, fmt.Sprintf("workflow %s not found", *e.goTo))
-			return false
+			return constant.ReturnAll
 		}
 		logger.DebugContext(ctx, fmt.Sprintf("go to => %s", *e.goTo))
 		w.Exec(ctx, dnsCtx)
-		return false
+		return constant.ReturnOnce
 	}
 	if e.setTTL != nil {
 		if *e.setTTL > 0 && dnsCtx.RespMsg != nil {
@@ -253,12 +259,15 @@ func (e *execItem) exec(ctx context.Context, logger log.ContextLogger, dnsCtx *a
 				dnsCtx.RespMsg.Ns = []dns.RR{tools.FakeSOA(name)}
 				logger.DebugContext(ctx, "return reject")
 				done = true
+			case "ONCE":
+				logger.DebugContext(ctx, "return once")
+				return constant.ReturnOnce
 			}
 		}
 		if !done {
 			logger.DebugContext(ctx, "return")
 		}
-		return false
+		return constant.ReturnAll
 	}
-	return true
+	return constant.Continue
 }

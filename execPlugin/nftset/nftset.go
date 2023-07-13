@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/execPlugin/nftset/internal"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
@@ -173,10 +174,10 @@ type dnsAddrRR struct {
 	ttl  time.Duration // second
 }
 
-func (n *NftSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (n *NftSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	respMsg := dnsCtx.RespMsg
 	if respMsg == nil {
-		return true
+		return constant.Continue, nil
 	}
 	var (
 		ip4 []dnsAddrRR
@@ -207,7 +208,7 @@ func (n *NftSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNS
 		}
 	}
 	if len(ip4) == 0 && len(ip6) == 0 {
-		return true
+		return constant.Continue, nil
 	}
 	if n.nftset4 != nil && len(ip4) > 0 {
 		for _, rr := range ip4 {
@@ -257,5 +258,5 @@ func (n *NftSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNS
 			}
 		}
 	}
-	return true
+	return constant.Continue, nil
 }

@@ -122,9 +122,9 @@ func (s *SingGeoIP) reloadGeoIP(ctx context.Context) {
 	s.logger.InfoContext(ctx, fmt.Sprintf("reload geoip success: %d, cost: %s", len(codes), time.Since(startTime).String()))
 }
 
-func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
 	if dnsCtx.RespMsg == nil || dnsCtx.RespMsg.Answer == nil || len(dnsCtx.RespMsg.Answer) == 0 {
-		return false
+		return false, nil
 	}
 	ips := make([]net.IP, 0)
 	for _, rr := range dnsCtx.RespMsg.Answer {
@@ -138,28 +138,31 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 		}
 	}
 	if len(ips) == 0 {
-		return false
+		return false, nil
 	}
 	codeAnyListAny, ok := args["code"]
 	if !ok {
-		s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
-		return false
+		err := fmt.Errorf("code type error: %T", args["code"])
+		s.logger.ErrorContext(ctx, err)
+		return false, err
 	}
 	codeMap := make(map[string]bool)
 	codeAnyList, ok := codeAnyListAny.([]any)
 	if !ok {
 		codeItem, ok := codeAnyListAny.(string)
 		if !ok {
-			s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
-			return false
+			err := fmt.Errorf("code type error: %T", args["code"])
+			s.logger.ErrorContext(ctx, err)
+			return false, err
 		}
 		codeMap[codeItem] = true
 	} else {
 		for _, codeAny := range codeAnyList {
 			codeItem, ok := codeAny.(string)
 			if !ok {
-				s.logger.ErrorContext(ctx, fmt.Sprintf("code type error: %T", args["code"]))
-				return false
+				err := fmt.Errorf("code type error: %T", args["code"])
+				s.logger.ErrorContext(ctx, err)
+				return false, err
 			}
 			codeMap[codeItem] = true
 		}
@@ -169,7 +172,7 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 		for _, ip := range ips {
 			select {
 			case <-ctx.Done():
-				return false
+				return false, context.Canceled
 			default:
 				code := reader.Lookup(ip)
 				if code == "unknown" {
@@ -177,12 +180,12 @@ func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adap
 				}
 				if codeMap[code] {
 					s.logger.DebugContext(ctx, fmt.Sprintf("match sing-geoip: %s", code))
-					return true
+					return true, nil
 				}
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (s *SingGeoIP) loadGeoIP() (*geoip.Reader, []string, error) {

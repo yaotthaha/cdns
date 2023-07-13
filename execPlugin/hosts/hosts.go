@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
@@ -131,27 +132,21 @@ func (h *Hosts) reloadRule(ctx context.Context) {
 	h.logger.InfoContext(ctx, fmt.Sprintf("reload rule success: %d", len(*rule)))
 }
 
-func (h *Hosts) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (h *Hosts) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	switch dnsCtx.ReqMsg.Question[0].Qtype {
 	case dns.TypeA:
 	case dns.TypeAAAA:
 	default:
-		return true
+		return constant.Continue, nil
 	}
 	ruleGroup := make([]*map[*rule][]netip.Addr, 0)
 	fileRule := h.fileRule.Load()
 	if fileRule == nil {
-		return true
+		return constant.ReturnAll, fmt.Errorf("file rule not found")
 	}
 	ruleGroup = append(ruleGroup, fileRule)
 	if h.insideRule != nil {
 		ruleGroup = append(ruleGroup, h.insideRule)
-	}
-	switch dnsCtx.ReqMsg.Question[0].Qtype {
-	case dns.TypeA:
-	case dns.TypeAAAA:
-	default:
-		return true
 	}
 	domain := dnsCtx.ReqMsg.Question[0].Name
 	if dns.IsFqdn(domain) {
@@ -202,11 +197,11 @@ func (h *Hosts) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSC
 					newRespMsg.Used(rr)
 					dnsCtx.RespMsg = newRespMsg
 				}
-				return true
+				return constant.Continue, nil
 			}
 		}
 	}
-	return true
+	return constant.Continue, nil
 }
 
 type rule struct {

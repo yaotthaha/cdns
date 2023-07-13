@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/log"
 )
 
@@ -62,7 +63,7 @@ type respMsg struct {
 	dnsCtx *adapter.DNSContext
 }
 
-func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) bool {
+func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
 	var (
 		workflowTags []string
 		waitTime     time.Duration
@@ -70,21 +71,24 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 	if workflowsAny, ok := args["workflows"]; ok {
 		workflowAnys, ok := workflowsAny.([]any)
 		if !ok {
-			w.logger.ErrorContext(ctx, fmt.Sprintf("workflows not found in args"))
-			return false
+			err := fmt.Errorf("workflows not found in args")
+			w.logger.ErrorContext(ctx, err)
+			return constant.ReturnAll, err
 		}
 		workflowTags = make([]string, 0)
 		for _, wa := range workflowAnys {
 			workflowStr, ok := wa.(string)
 			if !ok {
-				w.logger.ErrorContext(ctx, fmt.Sprintf("workflows not found in args"))
-				return false
+				err := fmt.Errorf("workflows not found in args")
+				w.logger.ErrorContext(ctx, err)
+				return constant.ReturnAll, err
 			}
 			workflowTags = append(workflowTags, workflowStr)
 		}
 		if len(workflowTags) == 0 {
-			w.logger.ErrorContext(ctx, fmt.Sprintf("workflows not found in args"))
-			return false
+			err := fmt.Errorf("workflows not found in args")
+			w.logger.ErrorContext(ctx, err)
+			return constant.ReturnAll, err
 		}
 		if len(workflowTags) == 2 {
 			waitTimeAny, ok := args["wait-time"]
@@ -93,23 +97,26 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 				if ok {
 					wt, err := time.ParseDuration(waitTimeStr)
 					if err != nil {
-						w.logger.ErrorContext(ctx, fmt.Sprintf("parse wait-time fail: %s", err))
-						return false
+						err = fmt.Errorf("parse wait-time fail: %s", err)
+						w.logger.ErrorContext(ctx, err)
+						return constant.ReturnAll, err
 					}
 					waitTime = wt
 				}
 			}
 		}
 	} else {
-		w.logger.ErrorContext(ctx, fmt.Sprintf("workflows not found in args"))
-		return false
+		err := fmt.Errorf("workflows not found in args")
+		w.logger.ErrorContext(ctx, err)
+		return constant.ReturnAll, err
 	}
 	var workflows []adapter.Workflow
 	for _, workflowTag := range workflowTags {
 		workflow := w.core.GetWorkflow(workflowTag)
 		if workflow == nil {
-			w.logger.ErrorContext(ctx, fmt.Sprintf("workflow %s not found", workflowTag))
-			return false
+			err := fmt.Errorf("workflow %s not found", workflowTag)
+			w.logger.ErrorContext(ctx, err)
+			return constant.ReturnAll, err
 		}
 		workflows = append(workflows, workflow)
 	}
@@ -162,7 +169,7 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 	case <-ctx.Done():
 		runCancel()
 		wg.Wait()
-		return false
+		return constant.ReturnAll, context.Canceled
 	case dnsMsg := <-respChan:
 		respDNSCtx = dnsMsg
 	}
@@ -175,5 +182,5 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 		w.logger.DebugContext(ctx, fmt.Sprintf("has resp-msg, use id [%s]", respDNSCtx.id))
 		respDNSCtx.dnsCtx.SaveTo(dnsCtx)
 	}
-	return true
+	return constant.Continue, nil
 }
