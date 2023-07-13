@@ -24,14 +24,18 @@ func init() {
 
 var (
 	_ adapter.MatchPlugin       = (*Script)(nil)
+	_ adapter.Starter           = (*Script)(nil)
+	_ adapter.WithContext       = (*Script)(nil)
 	_ adapter.WithContextLogger = (*Script)(nil)
 )
 
 type Script struct {
 	tag    string
+	ctx    context.Context
 	logger log.ContextLogger
 
 	option option
+	cache  types.AtomicValue[*string]
 }
 
 type option struct {
@@ -78,6 +82,10 @@ func (s *Script) WithContextLogger(logger log.ContextLogger) {
 	s.logger = logger
 }
 
+func (s *Script) WithContext(ctx context.Context) {
+	s.ctx = ctx
+}
+
 func (s *Script) newCommand(ctx context.Context) *exec.Cmd {
 	var cmd *exec.Cmd
 	if s.option.Args != nil && len(s.option.Args) > 0 {
@@ -94,6 +102,62 @@ func (s *Script) newCommand(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
+func (s *Script) runWrapper(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.option.Timeout))
+	defer cancel()
+	cmd := s.newCommand(ctx)
+	var (
+		stdout = bytes.NewBuffer(nil)
+		stderr = io.Discard
+	)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("run fail: %s", err)
+		return "", err
+	}
+	stdoutStr := stdout.String()
+	stdoutStr = strings.TrimSpace(stdoutStr)
+	return stdoutStr, nil
+}
+
+func (s *Script) runOrReadCache(ctx context.Context) (string, error) {
+	strPointer := s.cache.Load()
+	if strPointer == nil {
+		str, err := s.runWrapper(ctx)
+		if err != nil {
+			return "", err
+		}
+		s.cache.Store(&str)
+		return str, nil
+	} else {
+		return *strPointer, nil
+	}
+}
+
+func (s *Script) keepRun() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.runOrReadCache(s.ctx)
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Script) Start() error {
+	_, err := s.runOrReadCache(s.ctx)
+	if err != nil {
+		return err
+	}
+	go s.keepRun()
+	return nil
+}
+
 func (s *Script) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
 	var match string
 	matchAny, ok := args["match"]
@@ -108,22 +172,11 @@ func (s *Script) Match(ctx context.Context, args map[string]any, dnsCtx *adapter
 		s.logger.ErrorContext(ctx, err)
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.option.Timeout))
-	defer cancel()
-	cmd := s.newCommand(ctx)
-	var (
-		stdout = bytes.NewBuffer(nil)
-		stderr = io.Discard
-	)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
+	str, err := s.runOrReadCache(ctx)
 	if err != nil {
-		err = fmt.Errorf("run fail: %s", err)
+		err = fmt.Errorf("result not found: %s", err)
 		s.logger.ErrorContext(ctx, err)
 		return false, err
 	}
-	stdoutStr := stdout.String()
-	stdoutStr = strings.TrimSpace(stdoutStr)
-	return match == stdoutStr, nil
+	return match == str, nil
 }
