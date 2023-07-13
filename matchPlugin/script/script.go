@@ -39,11 +39,11 @@ type Script struct {
 }
 
 type option struct {
-	Cmd         string                 `yaml:cmd`
-	Args        types.Listable[string] `yaml:args`
-	Env         map[string]string      `yaml:env`
-	Timeout     types.TimeDuration     `yaml:timeout`
-	EnableCache bool                   `yaml:enable-cache`
+	Cmd         string                 `yaml:"cmd"`
+	Args        types.Listable[string] `yaml:"args"`
+	Env         map[string]string      `yaml:"env"`
+	Timeout     types.TimeDuration     `yaml:"timeout"`
+	EnableCache bool                   `yaml:"enable-cache"`
 }
 
 func NewScript(tag string, args map[string]any) (adapter.MatchPlugin, error) {
