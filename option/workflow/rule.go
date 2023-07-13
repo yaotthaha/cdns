@@ -30,6 +30,7 @@ type RuleMatchItem struct {
 	HasRespMsg *bool                          `yaml:"has-resp-msg,omitempty"`
 	RespIP     types.Listable[string]         `yaml:"resp-ip,omitempty"`
 	Mark       types.Listable[uint64]         `yaml:"mark,omitempty"`
+	Env        map[string]string              `yaml:"env,omitempty"`
 	Metadata   map[string]string              `yaml:"metadata,omitempty"`
 	Plugin     *RuleMatchPluginOption         `yaml:"plugin,omitempty"`
 	//

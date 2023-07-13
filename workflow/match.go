@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"os"
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/lib/tools"
@@ -21,6 +22,7 @@ type matchItem struct {
 	hasRespMsg *bool
 	respIP     []any
 	mark       []uint64
+	env        map[string]string
 	metadata   map[string]string
 	plugin     *matchPlugin
 	matchOr    []*matchItem
@@ -112,6 +114,14 @@ func newMatchItem(core adapter.Core, options workflow.RuleMatchItem) (*matchItem
 		rn++
 	}
 
+	if options.Env != nil && len(options.Env) > 0 {
+		rItem.env = make(map[string]string)
+		for k, v := range options.Env {
+			rItem.env[k] = v
+		}
+		rn++
+	}
+
 	if options.Metadata != nil && len(options.Metadata) > 0 {
 		rItem.metadata = make(map[string]string)
 		for k, v := range options.Metadata {
@@ -173,6 +183,7 @@ var matchItemFuncs []matchItemFunc
 func init() {
 	matchItemFuncs = []matchItemFunc{
 		matchMark,
+		matchEnv,
 		matchMetaData,
 		matchQType,
 		matchQName,
@@ -397,6 +408,33 @@ func matchMark(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsC
 			return 0
 		} else {
 			logger.DebugContext(ctx, fmt.Sprintf("match: mark => %s", matchStr))
+			return 1
+		}
+	}
+	return -1
+}
+
+func matchEnv(ctx context.Context, logger log.ContextLogger, r *matchItem, dnsCtx *adapter.DNSContext) int {
+	if r.env != nil {
+		match := true
+		for k := range r.env {
+			v := os.Getenv(k)
+			if r.env[k] != v {
+				match = false
+				break
+			}
+		}
+		if !match && r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match(invert): env => %s", r.env))
+			return 1
+		} else if match && r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("match(invert): env => %s", r.env))
+			return 0
+		} else if !match && !r.invert {
+			logger.DebugContext(ctx, fmt.Sprintf("no match: env => %s", r.env))
+			return 0
+		} else {
+			logger.DebugContext(ctx, fmt.Sprintf("match: env => %s", r.env))
 			return 1
 		}
 	}
