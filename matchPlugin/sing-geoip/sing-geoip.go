@@ -119,6 +119,51 @@ func (s *SingGeoIP) reloadGeoIP(ctx context.Context) {
 }
 
 func (s *SingGeoIP) Match(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (bool, error) {
+	if mAny, ok := args["match-client-ip"]; ok {
+		if m, ok := mAny.(bool); ok && m {
+			if dnsCtx.ClientIP.IsValid() {
+				codeMap := make(map[string]bool)
+				codeAny, ok := args["code"]
+				if !ok {
+					err := fmt.Errorf("code type error: %T", args["code"])
+					s.logger.ErrorContext(ctx, err)
+					return false, err
+				}
+				code, ok := codeAny.(string)
+				if ok {
+					codeMap[code] = true
+				} else {
+					codeSlice, ok := codeAny.([]any)
+					if !ok {
+						err := fmt.Errorf("code type error: %T", args["code"])
+						s.logger.ErrorContext(ctx, err)
+						return false, err
+					}
+					for _, codeAny := range codeSlice {
+						code, ok := codeAny.(string)
+						if !ok {
+							err := fmt.Errorf("code type error: %T", args["code"])
+							s.logger.ErrorContext(ctx, err)
+							return false, err
+						}
+						codeMap[code] = true
+					}
+				}
+				reader := s.reader.Load()
+				if reader == nil {
+					return false, nil
+				}
+				code = reader.Lookup(dnsCtx.ClientIP.AsSlice())
+				if code == "" || code == "unknown" {
+					return false, nil
+				}
+				if codeMap[code] {
+					return true, nil
+				}
+				return false, nil
+			}
+		}
+	}
 	if dnsCtx.RespMsg == nil || dnsCtx.RespMsg.Answer == nil || len(dnsCtx.RespMsg.Answer) == 0 {
 		return false, nil
 	}
