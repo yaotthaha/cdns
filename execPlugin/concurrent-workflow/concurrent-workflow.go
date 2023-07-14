@@ -127,7 +127,8 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 	runCtx, runCancel := context.WithCancel(ctx)
 	wg := sync.WaitGroup{}
 	for index, workflow := range workflows {
-		itemDNSCtx := dnsCtx.Clone()
+		itemDNSCtx := adapter.GetNewDNSContext()
+		dnsCtx.SaveTo(itemDNSCtx)
 		wg.Add(1)
 		go func(runCtx context.Context, workflow adapter.Workflow, dnsCtx *adapter.DNSContext, index int) {
 			defer wg.Done()
@@ -156,6 +157,7 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 					dnsCtx: dnsCtx,
 				}:
 				default:
+					adapter.PutDNSContext(dnsCtx)
 				}
 			}
 		}(runCtx, workflow, itemDNSCtx, index)
@@ -181,6 +183,7 @@ func (w *ConcurrentWorkflow) Exec(ctx context.Context, args map[string]any, dnsC
 	if respDNSCtx != nil {
 		w.logger.DebugContext(ctx, fmt.Sprintf("has resp-msg, use id [%s]", respDNSCtx.id))
 		respDNSCtx.dnsCtx.SaveTo(dnsCtx)
+		adapter.PutDNSContext(respDNSCtx.dnsCtx)
 	}
 	return constant.Continue, nil
 }

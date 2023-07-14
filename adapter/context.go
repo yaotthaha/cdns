@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"net/netip"
+	"sync"
 
 	"github.com/yaotthaha/cdns/lib/types"
 
@@ -51,6 +52,14 @@ type DNSContext struct {
 	PostUpstreamHook   *types.List[*PostUpstreamHookFunc]
 }
 
+var pool sync.Pool
+
+func init() {
+	pool.New = func() any {
+		return NewDNSContext()
+	}
+}
+
 func NewDNSContext() *DNSContext {
 	return &DNSContext{
 		MetaData:           types.CloneableSyncMap[string, types.CloneableValue]{},
@@ -64,10 +73,35 @@ func NewDNSContext() *DNSContext {
 	}
 }
 
+func GetNewDNSContext() *DNSContext {
+	return pool.Get().(*DNSContext)
+}
+
+func PutDNSContext(dnsCtx *DNSContext) {
+	dnsCtx.Reset()
+	pool.Put(dnsCtx)
+}
+
 func (d *DNSContext) Clone() *DNSContext {
 	newD := &DNSContext{}
 	d.SaveTo(newD)
 	return newD
+}
+
+func (d *DNSContext) Reset() {
+	d.Listener = ""
+	d.ClientIP = netip.Addr{}
+	d.Mark = 0
+	d.MetaData.Reset()
+	d.UsedWorkflow.Reset()
+	d.UsedUpstream.Reset()
+	d.ReqMsg = nil
+	d.RespMsg = nil
+	d.ExtraDNSMsgMap.Reset()
+	d.BeforeUpstreamHook.Reset()
+	d.AfterUpstreamHook.Reset()
+	d.PreUpstreamHook.Reset()
+	d.PostUpstreamHook.Reset()
 }
 
 func (d *DNSContext) SaveTo(dnsCtx *DNSContext) {

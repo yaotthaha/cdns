@@ -1,6 +1,8 @@
 package types
 
-import "sync"
+import (
+	"sync"
+)
 
 type CloneableValue interface {
 	Clone() CloneableValue
@@ -120,6 +122,13 @@ func (cm *CloneableSyncMap[K, V]) Clone() *CloneableSyncMap[K, V] {
 		return true
 	})
 	return &cmClone
+}
+
+func (cm *CloneableSyncMap[K, V]) Reset() {
+	cm.m.Range(func(keyAny any, valueAny any) bool {
+		cm.m.Delete(keyAny)
+		return true
+	})
 }
 
 type SyncMap[K comparable, V any] struct {

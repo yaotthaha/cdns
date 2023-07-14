@@ -85,7 +85,8 @@ func parseTLSOptions(tlsConfig *tls.Config, options listener.TLSOptions) error {
 }
 
 func handler(core adapter.Core, h adapter.Listener, reqMsg *dns.Msg, remoteIP netip.Addr) (context.Context, *dns.Msg) {
-	dnsCtx := adapter.NewDNSContext()
+	dnsCtx := adapter.GetNewDNSContext()
+	defer adapter.PutDNSContext(dnsCtx)
 	dnsCtx.Listener = h.Tag()
 	dnsCtx.ReqMsg = reqMsg
 	dnsCtx.ClientIP = remoteIP

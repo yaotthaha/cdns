@@ -86,3 +86,9 @@ func (l *List[T]) Clone() *List[T] {
 	copy(newL.arr, l.arr)
 	return newL
 }
+
+func (l *List[T]) Reset() {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	l.arr = l.arr[:0]
+}
