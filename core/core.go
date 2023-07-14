@@ -208,9 +208,9 @@ func New(ctx context.Context, logger log.Logger, options option.Options) (adapte
 }
 
 func (c *Core) Run() error {
-	c.logger.Info("core start")
+	c.logger.Info("core starting...")
 	startTime := time.Now()
-	defer c.logger.Info("core close")
+	defer c.logger.Info("core closed")
 	startFatalCtx, startFatalCancel := context.WithCancelCause(c.ctx)
 	if c.upstreams != nil {
 		for _, u := range c.upstreamArr {
@@ -320,11 +320,12 @@ func (c *Core) Run() error {
 			}
 		}()
 	}
-	c.logger.Info(fmt.Sprintf("core is running, cost %s", time.Since(startTime).String()))
+	c.logger.Info(fmt.Sprintf("core is started, cost %s", time.Since(startTime).String()))
 	select {
 	case <-startFatalCtx.Done():
 		return startFatalCtx.Err()
 	case <-c.ctx.Done():
+		c.logger.Warn("core closing...")
 	}
 	return nil
 }
