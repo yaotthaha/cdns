@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 type RuleMatchOr struct {
@@ -59,7 +58,7 @@ type _RuleExecItem RuleExecItem
 
 func (r *RuleExecItem) Unmarshal(from reflect.Value) error {
 	var stringOperate string
-	err := mapstructure.Decode(from.Interface(), &stringOperate)
+	err := tools.NewMapStructureDecoderWithResult(&stringOperate).Decode(from.Interface())
 	if err == nil {
 		switch stringOperate {
 		case "return":
@@ -72,6 +71,9 @@ func (r *RuleExecItem) Unmarshal(from reflect.Value) error {
 		}
 		return nil
 	}
-	err = mapstructure.Decode(from.Interface(), (*_RuleExecItem)(r))
-	return err
+	err = tools.NewMapStructureDecoderWithResult((*_RuleExecItem)(r)).Decode(from.Interface())
+	if err != nil {
+		return err
+	}
+	return nil
 }

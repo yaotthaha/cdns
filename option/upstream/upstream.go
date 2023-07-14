@@ -5,9 +5,8 @@ import (
 	"reflect"
 
 	"github.com/yaotthaha/cdns/constant"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 type UpstreamOptions struct {
@@ -33,15 +32,7 @@ type _UpstreamOptions struct {
 
 func (u *UpstreamOptions) Unmarshal(from reflect.Value) error {
 	var _upstreamOptions _UpstreamOptions
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		Result:     &_upstreamOptions,
-		TagName:    "config",
-	})
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(from.Interface())
+	err := tools.NewMapStructureDecoderWithResult(&_upstreamOptions).Decode(from.Interface())
 	if err != nil {
 		return err
 	}
@@ -50,10 +41,7 @@ func (u *UpstreamOptions) Unmarshal(from reflect.Value) error {
 	} else {
 		u.Tag = _upstreamOptions.Tag
 	}
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		TagName:    "config",
-	}
+	decoderConfig := tools.NewMapStructureDecoderConfig()
 	u.Type = _upstreamOptions.Type
 	switch u.Type {
 	case constant.UpstreamUDP:
@@ -83,11 +71,7 @@ func (u *UpstreamOptions) Unmarshal(from reflect.Value) error {
 	default:
 		return fmt.Errorf("upstream type %s is not supported", u.Type)
 	}
-	decoder, err = mapstructure.NewDecoder(decoderConfig)
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(_upstreamOptions.Options)
+	err = tools.NewMapStructureDecoderFromConfig(decoderConfig).Decode(_upstreamOptions.Options)
 	if err != nil {
 		return err
 	}

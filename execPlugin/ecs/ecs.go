@@ -7,10 +7,10 @@ import (
 
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/log"
 
 	"github.com/miekg/dns"
-	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -45,13 +45,7 @@ func NewECS(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	}
 
 	var op option
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result: &op,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("decode config fail: %s", err)
-	}
-	err = decoder.Decode(args)
+	err := tools.NewMapStructureDecoderWithResult(&op).Decode(args)
 	if err != nil {
 		return nil, fmt.Errorf("decode config fail: %s", err)
 	}

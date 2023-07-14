@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yaotthaha/cdns/adapter"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 	"github.com/yaotthaha/cdns/matchPlugin/sing-geosite/geosite"
@@ -17,7 +18,6 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"github.com/mitchellh/mapstructure"
 )
 
 const PluginType = "sing-geosite"
@@ -182,14 +182,7 @@ func NewSingGeoSite(tag string, args map[string]any) (adapter.MatchPlugin, error
 	}
 
 	var op option
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		Result:     &op,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("decode config fail: %s", err)
-	}
-	err = decoder.Decode(args)
+	err := tools.NewMapStructureDecoderWithResult(&op).Decode(args)
 	if err != nil {
 		return nil, fmt.Errorf("decode config fail: %s", err)
 	}

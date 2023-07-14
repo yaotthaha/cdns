@@ -3,7 +3,7 @@ package types
 import (
 	"reflect"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/yaotthaha/cdns/lib/tools"
 )
 
 type Listable[T any] []T
@@ -33,13 +33,17 @@ func (l Listable[T]) MarshalYAML() (interface{}, error) {
 
 func (l *Listable[T]) Unmarshal(from reflect.Value) error {
 	var v []T
-	err := mapstructure.Decode(from.Interface(), &v)
+	decoderConfig := tools.NewMapStructureDecoderConfig()
+	decoderConfig.Result = &v
+	err := tools.NewMapStructureDecoderFromConfig(decoderConfig).Decode(from.Interface())
 	if err == nil {
 		*l = v
 		return nil
 	}
 	var singleItem T
-	err = mapstructure.Decode(from.Interface(), &singleItem)
+	decoderConfig = tools.NewMapStructureDecoderConfig()
+	decoderConfig.Result = &singleItem
+	err = tools.NewMapStructureDecoderFromConfig(decoderConfig).Decode(from.Interface())
 	if err != nil {
 		return err
 	}

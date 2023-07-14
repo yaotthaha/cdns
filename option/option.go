@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/option/execPlugin"
 	"github.com/yaotthaha/cdns/option/listener"
 	"github.com/yaotthaha/cdns/option/matchPlugin"
 	"github.com/yaotthaha/cdns/option/upstream"
 	"github.com/yaotthaha/cdns/option/workflow"
 
-	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,15 +63,7 @@ func ReadContent(content []byte, configType configType) (*Option, error) {
 		return nil, err
 	}
 	var option Option
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		Result:     &option,
-		TagName:    "config",
-	})
-	if err != nil {
-		return nil, err
-	}
-	err = decoder.Decode(optionMap)
+	err = tools.NewMapStructureDecoderWithResult(&option).Decode(optionMap)
 	if err != nil {
 		return nil, err
 	}

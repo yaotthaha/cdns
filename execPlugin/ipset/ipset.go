@@ -11,12 +11,12 @@ import (
 	"github.com/yaotthaha/cdns/adapter"
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/execPlugin/ipset/internal"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -57,14 +57,7 @@ func NewIPSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	}
 
 	var op option
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		Result:     &op,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("decode config fail: %s", err)
-	}
-	err = decoder.Decode(args)
+	err := tools.NewMapStructureDecoderWithResult(&op).Decode(args)
 	if err != nil {
 		return nil, fmt.Errorf("decode config fail: %s", err)
 	}

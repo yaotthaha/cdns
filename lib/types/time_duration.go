@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/yaotthaha/cdns/lib/tools"
 )
 
 type TimeDuration time.Duration
@@ -29,7 +29,7 @@ func (t TimeDuration) MarshalYAML() (interface{}, error) {
 
 func (t *TimeDuration) Unmarshal(from reflect.Value) error {
 	var timeStr string
-	err := mapstructure.Decode(from.Interface(), &timeStr)
+	err := tools.NewMapStructureDecoderWithResult(&timeStr).Decode(from.Interface())
 	if err != nil {
 		return err
 	}

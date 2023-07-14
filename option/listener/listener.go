@@ -5,9 +5,8 @@ import (
 	"reflect"
 
 	"github.com/yaotthaha/cdns/constant"
+	"github.com/yaotthaha/cdns/lib/tools"
 	"github.com/yaotthaha/cdns/lib/types"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 type ListenerOptions struct {
@@ -30,7 +29,7 @@ type _ListenerOptions struct {
 
 func (l *ListenerOptions) Unmarshal(from reflect.Value) error {
 	var _listenerOptions _ListenerOptions
-	err := mapstructure.Decode(from.Interface(), &_listenerOptions)
+	err := tools.NewMapStructureDecoderWithResult(&_listenerOptions).Decode(from.Interface())
 	if err != nil {
 		return err
 	}
@@ -44,10 +43,7 @@ func (l *ListenerOptions) Unmarshal(from reflect.Value) error {
 	} else {
 		l.Workflow = _listenerOptions.Workflow
 	}
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
-		TagName:    "config",
-	}
+	decoderConfig := tools.NewMapStructureDecoderConfig()
 	l.Type = _listenerOptions.Type
 	switch l.Type {
 	case constant.ListenerUDP:
@@ -65,11 +61,7 @@ func (l *ListenerOptions) Unmarshal(from reflect.Value) error {
 	default:
 		return fmt.Errorf("listener type %s is not supported", l.Type)
 	}
-	decoder, err := mapstructure.NewDecoder(decoderConfig)
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(_listenerOptions.Options)
+	err = tools.NewMapStructureDecoderFromConfig(decoderConfig).Decode(_listenerOptions.Options)
 	if err != nil {
 		return err
 	}

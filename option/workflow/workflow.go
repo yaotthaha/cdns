@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/yaotthaha/cdns/lib/tools"
 )
 
 type _WorkflowOption struct {
@@ -18,15 +18,15 @@ type WorkflowOptions struct {
 }
 
 func (w *WorkflowOptions) Unmarshal(from reflect.Value) error {
-	var workflowOption _WorkflowOption
-	err := mapstructure.Decode(from.Interface(), &workflowOption)
+	var _workflowOption _WorkflowOption
+	err := tools.NewMapStructureDecoderWithResult(&_workflowOption).Decode(from.Interface())
 	if err != nil {
 		return err
 	}
-	w.Tag = workflowOption.Tag
-	if workflowOption.Rules != nil && len(workflowOption.Rules) > 0 {
-		w.Rules = make([]any, len(workflowOption.Rules))
-		for i, v := range workflowOption.Rules {
+	w.Tag = _workflowOption.Tag
+	if _workflowOption.Rules != nil && len(_workflowOption.Rules) > 0 {
+		w.Rules = make([]any, len(_workflowOption.Rules))
+		for i, v := range _workflowOption.Rules {
 			var (
 				haveMatchOr  bool
 				haveMatchAnd bool
@@ -56,7 +56,7 @@ func (w *WorkflowOptions) Unmarshal(from reflect.Value) error {
 			default:
 				return fmt.Errorf("invalid workflow rules: %+v", v)
 			}
-			err = mapstructure.Decode(v, r)
+			err = tools.NewMapStructureDecoderWithResult(r).Decode(v)
 			if err != nil {
 				return err
 			}
