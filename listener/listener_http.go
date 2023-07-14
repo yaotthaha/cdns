@@ -244,31 +244,14 @@ func (l *httpListener) Start() error {
 }
 
 func (l *httpListener) Close() error {
-	var err error
 	if !l.useH3 {
-		err = l.httpServer.Close()
-		if err != nil {
-			err = fmt.Errorf("close http listener fail: %s", err)
-			l.httpListener.Close()
-		} else {
-			err = l.httpListener.Close()
-			if err != nil {
-				err = fmt.Errorf("close http listener fail: %s", err)
-			}
-		}
+		l.httpServer.Close()
+		l.httpListener.Close()
 	} else {
-		err = l.http3Server.Close()
-		if err != nil {
-			err = fmt.Errorf("close http listener fail: %s", err)
-			l.udpConn.Close()
-		} else {
-			err = l.udpConn.Close()
-			if err != nil {
-				err = fmt.Errorf("close http listener fail: %s", err)
-			}
-		}
+		l.http3Server.Close()
+		l.udpConn.Close()
 	}
-	return err
+	return nil
 }
 
 func (l *httpListener) WithFatalCloser(f func(err error)) {

@@ -5,12 +5,13 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"syscall"
 )
 
-var errs = []error{io.EOF, net.ErrClosed, io.ErrClosedPipe, os.ErrClosed, syscall.EPIPE, syscall.ECONNRESET, context.Canceled, context.DeadlineExceeded}
+var errs = []error{io.EOF, net.ErrClosed, io.ErrClosedPipe, os.ErrClosed, http.ErrServerClosed, syscall.EPIPE, syscall.ECONNRESET, context.Canceled, context.DeadlineExceeded}
 
 func IsCloseOrCanceled(err error) bool {
 	for _, e := range errs {
