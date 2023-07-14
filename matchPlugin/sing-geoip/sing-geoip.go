@@ -42,7 +42,7 @@ type SingGeoIP struct {
 }
 
 type option struct {
-	File string `yaml:"file"`
+	File string `config:"file"`
 }
 
 func NewSingGeoIP(tag string, args map[string]any) (adapter.MatchPlugin, error) {

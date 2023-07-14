@@ -45,8 +45,8 @@ type Hosts struct {
 }
 
 type option struct {
-	Rule types.Listable[string] `yaml:"rule"`
-	File types.Listable[string] `yaml:"file"`
+	Rule types.Listable[string] `config:"rule"`
+	File types.Listable[string] `config:"file"`
 }
 
 func NewHosts(tag string, args map[string]any) (adapter.ExecPlugin, error) {

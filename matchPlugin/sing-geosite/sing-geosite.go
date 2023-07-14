@@ -172,8 +172,8 @@ func (d *domainItem) match(ctx context.Context, domain string) (string, string, 
 }
 
 type option struct {
-	File string                 `yaml:"file"`
-	Code types.Listable[string] `yaml:"code"`
+	File string                 `config:"file"`
+	Code types.Listable[string] `config:"code"`
 }
 
 func NewSingGeoSite(tag string, args map[string]any) (adapter.MatchPlugin, error) {

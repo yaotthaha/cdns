@@ -43,12 +43,12 @@ type IPSet struct {
 }
 
 type option struct {
-	Name4 string             `yaml:"name4"`
-	Mask4 uint8              `yaml:"mask4"`
-	TTL4  types.TimeDuration `yaml:"ttl4"`
-	Name6 string             `yaml:"name6"`
-	Mask6 uint8              `yaml:"mask6"`
-	TTL6  types.TimeDuration `yaml:"ttl6"`
+	Name4 string             `config:"name4"`
+	Mask4 uint8              `config:"mask4"`
+	TTL4  types.TimeDuration `config:"ttl4"`
+	Name6 string             `config:"name6"`
+	Mask6 uint8              `config:"mask6"`
+	TTL6  types.TimeDuration `config:"ttl6"`
 }
 
 func NewIPSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {

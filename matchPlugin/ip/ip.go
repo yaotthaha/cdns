@@ -45,9 +45,9 @@ type IP struct {
 }
 
 type option struct {
-	File types.Listable[string] `yaml:"file"`
-	IP   types.Listable[string] `yaml:"ip"`
-	CIDR types.Listable[string] `yaml:"cidr"`
+	File types.Listable[string] `config:"file"`
+	IP   types.Listable[string] `config:"ip"`
+	CIDR types.Listable[string] `config:"cidr"`
 }
 
 func NewIP(tag string, args map[string]any) (adapter.MatchPlugin, error) {

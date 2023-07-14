@@ -49,9 +49,9 @@ type RedisCache struct {
 }
 
 type option struct {
-	Address  string `yaml:"address"`
-	Password string `yaml:"password"`
-	Database int    `yaml:"database"`
+	Address  string `config:"address"`
+	Password string `config:"password"`
+	Database int    `config:"database"`
 }
 
 func NewRedisCache(tag string, args map[string]any) (adapter.ExecPlugin, error) {

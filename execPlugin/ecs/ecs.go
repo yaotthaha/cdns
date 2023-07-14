@@ -33,10 +33,10 @@ type ECS struct {
 }
 
 type option struct {
-	IP4   string `yaml:"ip4"`
-	IP6   string `yaml:"ip6"`
-	Mask4 uint8  `yaml:"mask4"`
-	Mask6 uint8  `yaml:"mask6"`
+	IP4   string `config:"ip4"`
+	IP6   string `config:"ip6"`
+	Mask4 uint8  `config:"mask4"`
+	Mask6 uint8  `config:"mask6"`
 }
 
 func NewECS(tag string, args map[string]any) (adapter.ExecPlugin, error) {

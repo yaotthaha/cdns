@@ -45,11 +45,11 @@ type Domain struct {
 }
 
 type option struct {
-	Full    types.Listable[string] `yaml:"full"`
-	Suffix  types.Listable[string] `yaml:"suffix"`
-	Keyword types.Listable[string] `yaml:"keyword"`
-	Regex   types.Listable[string] `yaml:"regex"`
-	File    types.Listable[string] `yaml:"file"`
+	Full    types.Listable[string] `config:"full"`
+	Suffix  types.Listable[string] `config:"suffix"`
+	Keyword types.Listable[string] `config:"keyword"`
+	Regex   types.Listable[string] `config:"regex"`
+	File    types.Listable[string] `config:"file"`
 }
 
 func NewDomain(tag string, args map[string]any) (adapter.MatchPlugin, error) {

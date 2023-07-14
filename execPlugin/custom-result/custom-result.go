@@ -48,8 +48,8 @@ type CustomResult struct {
 }
 
 type option struct {
-	Result map[string]string      `yaml:"result"`
-	File   types.Listable[string] `yaml:"file"`
+	Result map[string]string      `config:"result"`
+	File   types.Listable[string] `config:"file"`
 }
 
 func NewCustomResult(tag string, args map[string]any) (adapter.ExecPlugin, error) {

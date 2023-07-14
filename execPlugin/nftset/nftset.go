@@ -43,14 +43,14 @@ type NftSet struct {
 }
 
 type option struct {
-	TableName4 string             `yaml:"table-name4"`
-	SetName4   string             `yaml:"set-name4"`
-	Mask4      uint8              `yaml:"mask4"`
-	TTL4       types.TimeDuration `yaml:"ttl4"`
-	TableName6 string             `yaml:"table-name6"`
-	SetName6   string             `yaml:"set-name6"`
-	Mask6      uint8              `yaml:"mask6"`
-	TTL6       types.TimeDuration `yaml:"ttl6"`
+	TableName4 string             `config:"table-name4"`
+	SetName4   string             `config:"set-name4"`
+	Mask4      uint8              `config:"mask4"`
+	TTL4       types.TimeDuration `config:"ttl4"`
+	TableName6 string             `config:"table-name6"`
+	SetName6   string             `config:"set-name6"`
+	Mask6      uint8              `config:"mask6"`
+	TTL6       types.TimeDuration `config:"ttl6"`
 }
 
 func NewNftSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
