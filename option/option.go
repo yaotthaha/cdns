@@ -57,7 +57,13 @@ func ReadContent(content []byte, configType configType) (*Option, error) {
 	case YAML:
 		err = yaml.Unmarshal(content, &optionMap)
 	default:
-		return nil, fmt.Errorf("config type %s not support", configType)
+		err = yaml.Unmarshal(content, &optionMap)
+		if err != nil {
+			err = json.Unmarshal(content, &optionMap)
+			if err != nil {
+				return nil, fmt.Errorf("config type %s not support", configType)
+			}
+		}
 	}
 	if err != nil {
 		return nil, err
