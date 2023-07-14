@@ -71,9 +71,9 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.ContextL
 		l.path = "/dns-query"
 	}
 	if !httpOptions.EnableH3 {
-		if httpOptions.TLSOptions != nil {
+		if !httpOptions.TLSOptions.IsEmpty() {
 			tlsConfig := &tls.Config{}
-			err := parseTLSOptions(tlsConfig, *httpOptions.TLSOptions)
+			err := parseTLSOptions(tlsConfig, httpOptions.TLSOptions)
 			if err != nil {
 				return nil, fmt.Errorf("create http listener fail: %s", err)
 			}
@@ -97,11 +97,11 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.ContextL
 			return nil, fmt.Errorf("create http listener fail: %s", err)
 		}
 		l.listen = listenAddr
-		if httpOptions.TLSOptions == nil {
+		if httpOptions.TLSOptions.IsEmpty() {
 			return nil, fmt.Errorf("create http listener fail: tls options is required when use protocol 3")
 		}
 		tlsConfig := http3.ConfigureTLSConfig(&tls.Config{})
-		err = parseTLSOptions(tlsConfig, *httpOptions.TLSOptions)
+		err = parseTLSOptions(tlsConfig, httpOptions.TLSOptions)
 		if err != nil {
 			return nil, fmt.Errorf("create http listener fail: %s", err)
 		}

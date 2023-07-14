@@ -73,3 +73,16 @@ type TLSOptions struct {
 	KeyFile      string                 `config:"key-file,inline"`
 	ClientCAFile types.Listable[string] `config:"client-ca-file,omitempty"`
 }
+
+func (o *TLSOptions) IsEmpty() bool {
+	if o.CertFile != "" {
+		return false
+	}
+	if o.KeyFile != "" {
+		return false
+	}
+	if o.ClientCAFile != nil && len(o.ClientCAFile) > 0 {
+		return false
+	}
+	return true
+}
