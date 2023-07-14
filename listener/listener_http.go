@@ -114,8 +114,8 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.ContextL
 			Allow0RTT:             true,
 		}
 	}
-	if httpOptions.ReadIPHeader != nil && len(httpOptions.ReadIPHeader) > 0 {
-		l.realIPHeader = httpOptions.ReadIPHeader
+	if httpOptions.RealIPHeader != nil && len(httpOptions.RealIPHeader) > 0 {
+		l.realIPHeader = httpOptions.RealIPHeader
 	}
 	if httpOptions.TrustIP != nil && len(httpOptions.TrustIP) > 0 {
 		ips := make([]any, 0)
@@ -270,19 +270,6 @@ func (l *httpListener) GetWorkflow() adapter.Workflow {
 	return l.core.GetWorkflow(l.workflow)
 }
 
-func (l *httpListener) parseNetAddr(addr string) *netAddr {
-	var network string
-	if l.useH3 {
-		network = constant.NetworkUDP
-	} else {
-		network = constant.NetworkTCP
-	}
-	return &netAddr{
-		network: network,
-		addr:    addr,
-	}
-}
-
 func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	remoteAddrPort, err := netip.ParseAddrPort(r.RemoteAddr)
@@ -360,21 +347,21 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 		if len(s) == 0 {
 			l.logger.Debug(fmt.Sprintf("http request query dns is empty"))
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, []byte("400 Bad Request"))
+			w.Write([]byte("400 Bad Request"))
 			return
 		}
 		msgSize := base64.RawURLEncoding.DecodedLen(len(s))
 		if msgSize > dns.MaxMsgSize {
 			l.logger.Debug(fmt.Sprintf("msg length %d is too big", msgSize))
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, []byte("400 Bad Request"))
+			w.Write([]byte("400 Bad Request"))
 			return
 		}
 		rawDNSMsg, err = base64.RawURLEncoding.DecodeString(s)
 		if err != nil {
 			l.logger.Debug(fmt.Sprintf("failed to decode base64 query: %s", err))
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, []byte("400 Bad Request"))
+			w.Write([]byte("400 Bad Request"))
 			return
 		}
 	case http.MethodPost:
@@ -383,7 +370,7 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			l.logger.Debug(fmt.Sprintf("failed to read request body: %w", err))
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, []byte("400 Bad Request"))
+			w.Write([]byte("400 Bad Request"))
 			return
 		}
 		rawDNSMsg = buf.Bytes()
@@ -397,20 +384,20 @@ func (l *httpListener) httpHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		l.logger.Debug(fmt.Sprintf("read http request body fail: %s", err))
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, []byte("400 Bad Request"))
+		w.Write([]byte("400 Bad Request"))
 		return
 	}
 	ctx, respMsg := handler(l.core, l, dnsMsg, remoteIP)
 	if respMsg == nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, []byte("500 Server Internal Error"))
+		w.Write([]byte("500 Server Internal Error"))
 		return
 	}
 	respMsgBytes, err := respMsg.Pack()
 	if err != nil {
 		l.logger.DebugContext(ctx, fmt.Sprintf("pack dns message fail: %s", err))
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, []byte("500 Server Internal Error"))
+		w.Write([]byte("500 Server Internal Error"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/dns-message")
