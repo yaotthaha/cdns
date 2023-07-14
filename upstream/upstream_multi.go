@@ -40,10 +40,10 @@ func NewMultiUpstream(ctx context.Context, logger log.ContextLogger, options ups
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.MultiOptions == nil {
 		return nil, fmt.Errorf("create multi upstream fail: options is empty")
 	}
-	multiOptions := options.Options.(*upstream.UpstreamMultiOptions)
+	multiOptions := options.MultiOptions
 	if multiOptions.Upstreams == nil || len(multiOptions.Upstreams) == 0 {
 		return nil, fmt.Errorf("create multi upstream fail: upstreams is empty")
 	}

@@ -14,7 +14,6 @@ import (
 	"github.com/yaotthaha/cdns/option"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var runCommand = &cobra.Command{
@@ -30,13 +29,7 @@ func init() {
 }
 
 func run() int {
-	configContent, err := os.ReadFile(paramConfig)
-	if err != nil {
-		log.DefaultSimpleLogger.Fatal(err)
-		return 1
-	}
-	var options option.Option
-	err = yaml.Unmarshal(configContent, &options)
+	options, err := option.ReadFile(paramConfig)
 	if err != nil {
 		log.DefaultSimpleLogger.Fatal(err)
 		return 1
@@ -71,7 +64,7 @@ func run() int {
 	logger.Info(constant.GetVersion())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := core.New(ctx, logger, options)
+	c, err := core.New(ctx, logger, *options)
 	if err != nil {
 		logger.Fatal(err)
 		return 1

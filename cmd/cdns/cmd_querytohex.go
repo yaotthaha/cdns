@@ -81,7 +81,7 @@ func queryToHexWrapper(address string, domain string, typ uint16) (string, error
 	simpleDNSUpstream, err := upstream.NewUDPUpstream(ctx, contextLogger, option.UpstreamOptions{
 		Tag:  "simple",
 		Type: constant.UpstreamUDP,
-		Options: &option.UpstreamUDPOptions{
+		UDPOptions: &option.UpstreamUDPOptions{
 			Address: address,
 		},
 	})

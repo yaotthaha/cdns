@@ -58,10 +58,10 @@ func NewHTTPSUpstream(ctx context.Context, logger log.ContextLogger, options ups
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.HTTPSOptions == nil {
 		return nil, fmt.Errorf("create https upstream fail: options is empty")
 	}
-	httpsOptions := options.Options.(*upstream.UpstreamHTTPSOptions)
+	httpsOptions := options.HTTPSOptions
 	if httpsOptions.QueryTimeout > 0 {
 		u.queryTimeout = time.Duration(httpsOptions.QueryTimeout)
 	} else {

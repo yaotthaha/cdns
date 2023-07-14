@@ -2,93 +2,121 @@ package upstream
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/types"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 type UpstreamOptions struct {
-	Tag     string `yaml:"tag"`
-	Type    string `yaml:"type"`
-	Options any    `yaml:"options"`
+	Tag  string `config:"tag"`
+	Type string `config:"type"`
+	//
+	UDPOptions   *UpstreamUDPOptions
+	TCPOptions   *UpstreamTCPOptions
+	TLSOptions   *UpstreamTLSOptions
+	HTTPSOptions *UpstreamHTTPSOptions
+	QUICOptions  *UpstreamQUICOptions
+	//
+	MultiOptions     *UpstreamMultiOptions
+	RandomOptions    *UpstreamRandomOptions
+	QueryTestOptions *UpstreamQueryTestOptions
 }
 
-type _UpstreamOptions UpstreamOptions
-
-type GetOptions interface {
-	GetOptions() any
+type _UpstreamOptions struct {
+	Tag     string         `config:"tag"`
+	Type    string         `config:"type"`
+	Options map[string]any `config:"options"`
 }
 
-type UpstreamTypeOptions[T any] struct {
-	Tag     string `yaml:"tag"`
-	Type    string `yaml:"type"`
-	Options *T     `yaml:"options"`
-}
-
-func (u *UpstreamTypeOptions[T]) GetOptions() any {
-	return u.Options
-}
-
-func (u *UpstreamOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	err := unmarshal((*_UpstreamOptions)(u))
+func (u *UpstreamOptions) Unmarshal(from reflect.Value) error {
+	var _upstreamOptions _UpstreamOptions
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &_upstreamOptions,
+		TagName:    "config",
+	})
 	if err != nil {
 		return err
 	}
-	if u.Tag == "" {
-		return fmt.Errorf("upstream tag is empty")
+	err = decoder.Decode(from.Interface())
+	if err != nil {
+		return err
 	}
-	var opts GetOptions
+	if _upstreamOptions.Tag == "" {
+		return fmt.Errorf("upstream tag is empty")
+	} else {
+		u.Tag = _upstreamOptions.Tag
+	}
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		TagName:    "config",
+	}
+	u.Type = _upstreamOptions.Type
 	switch u.Type {
 	case constant.UpstreamUDP:
-		opts = &UpstreamTypeOptions[UpstreamUDPOptions]{}
+		u.UDPOptions = &UpstreamUDPOptions{}
+		decoderConfig.Result = u.UDPOptions
 	case constant.UpstreamTCP:
-		opts = &UpstreamTypeOptions[UpstreamTCPOptions]{}
+		u.TCPOptions = &UpstreamTCPOptions{}
+		decoderConfig.Result = u.TCPOptions
 	case constant.UpstreamTLS:
-		opts = &UpstreamTypeOptions[UpstreamTLSOptions]{}
+		u.TLSOptions = &UpstreamTLSOptions{}
+		decoderConfig.Result = u.TLSOptions
 	case constant.UpstreamHTTPS:
-		opts = &UpstreamTypeOptions[UpstreamHTTPSOptions]{}
+		u.HTTPSOptions = &UpstreamHTTPSOptions{}
+		decoderConfig.Result = u.HTTPSOptions
 	case constant.UpstreamQUIC:
-		opts = &UpstreamTypeOptions[UpstreamQUICOptions]{}
+		u.QUICOptions = &UpstreamQUICOptions{}
+		decoderConfig.Result = u.QUICOptions
 	case constant.UpstreamMulti:
-		opts = &UpstreamTypeOptions[UpstreamMultiOptions]{}
+		u.MultiOptions = &UpstreamMultiOptions{}
+		decoderConfig.Result = u.MultiOptions
 	case constant.UpstreamRandom:
-		opts = &UpstreamTypeOptions[UpstreamRandomOptions]{}
+		u.RandomOptions = &UpstreamRandomOptions{}
+		decoderConfig.Result = u.RandomOptions
 	case constant.UpstreamQueryTest:
-		opts = &UpstreamTypeOptions[UpstreamQueryTestOptions]{}
+		u.QueryTestOptions = &UpstreamQueryTestOptions{}
+		decoderConfig.Result = u.QueryTestOptions
 	default:
 		return fmt.Errorf("upstream type %s is not supported", u.Type)
 	}
-	err = unmarshal(opts)
+	decoder, err = mapstructure.NewDecoder(decoderConfig)
 	if err != nil {
 		return err
 	}
-	u.Options = opts.GetOptions()
+	err = decoder.Decode(_upstreamOptions.Options)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 type DialerOptions struct {
-	Timeout       types.TimeDuration `yaml:"timeout,omitempty"`
-	SoMark        uint32             `yaml:"so-mark,omitempty"`
-	BindInterface string             `yaml:"bind-interface,omitempty"`
-	BindIP        string             `yaml:"bind-ip,omitempty"`
-	Socks5        *Socks5Options     `yaml:"socks5,omitempty"`
+	Timeout       types.TimeDuration `config:"timeout,omitempty"`
+	SoMark        uint32             `config:"so-mark,omitempty"`
+	BindInterface string             `config:"bind-interface,omitempty"`
+	BindIP        string             `config:"bind-ip,omitempty"`
+	Socks5        *Socks5Options     `config:"socks5,omitempty"`
 }
 
 type Socks5Options struct {
-	Address  string `yaml:"address"`
-	Username string `yaml:"username,omitempty"`
-	Password string `yaml:"password,omitempty"`
+	Address  string `config:"address"`
+	Username string `config:"username,omitempty"`
+	Password string `config:"password,omitempty"`
 }
 
 type BootstrapOptions struct {
-	Upstream string `yaml:"upstream"`
-	Strategy string `yaml:"strategy,omitempty"`
+	Upstream string `config:"upstream"`
+	Strategy string `config:"strategy,omitempty"`
 }
 
 type TLSOptions struct {
-	ServerName         string                 `yaml:"servername,omitempty"`
-	InsecureSkipVerify bool                   `yaml:"insecure-skip-verify,omitempty"`
-	CAFile             types.Listable[string] `yaml:"ca-file,omitempty"`
-	ClientCertFile     string                 `yaml:"client-cert-file,omitempty"`
-	ClientKeyFile      string                 `yaml:"client-key-file,omitempty"`
+	ServerName         string                 `config:"servername,omitempty"`
+	InsecureSkipVerify bool                   `config:"insecure-skip-verify,omitempty"`
+	CAFile             types.Listable[string] `config:"ca-file,omitempty"`
+	ClientCertFile     string                 `config:"client-cert-file,omitempty"`
+	ClientKeyFile      string                 `config:"client-key-file,omitempty"`
 }

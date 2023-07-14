@@ -2,61 +2,64 @@ package workflow
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/yaotthaha/cdns/lib/types"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 type RuleMatchOr struct {
-	MatchOr  types.Listable[RuleMatchItem] `yaml:"match-or"`
-	ElseExec types.Listable[RuleExecItem]  `yaml:"else-exec"`
-	Exec     types.Listable[RuleExecItem]  `yaml:"exec"`
+	MatchOr  types.Listable[RuleMatchItem] `config:"match-or"`
+	ElseExec types.Listable[RuleExecItem]  `config:"else-exec"`
+	Exec     types.Listable[RuleExecItem]  `config:"exec"`
 }
 
 type RuleMatchAnd struct {
-	MatchAnd types.Listable[RuleMatchItem] `yaml:"match-and"`
-	ElseExec types.Listable[RuleExecItem]  `yaml:"else-exec"`
-	Exec     types.Listable[RuleExecItem]  `yaml:"exec"`
+	MatchAnd types.Listable[RuleMatchItem] `config:"match-and"`
+	ElseExec types.Listable[RuleExecItem]  `config:"else-exec"`
+	Exec     types.Listable[RuleExecItem]  `config:"exec"`
 }
 
 type RuleExec struct {
-	Exec types.Listable[RuleExecItem] `yaml:"exec"`
+	Exec types.Listable[RuleExecItem] `config:"exec"`
 }
 
 type RuleMatchItem struct {
-	Listener   types.Listable[string]         `yaml:"listener,omitempty"`
-	ClientIP   types.Listable[string]         `yaml:"client-ip,omitempty"`
-	QType      types.Listable[types.DNSQType] `yaml:"qtype,omitempty"`
-	QName      types.Listable[string]         `yaml:"qname,omitempty"`
-	HasRespMsg *bool                          `yaml:"has-resp-msg,omitempty"`
-	RespIP     types.Listable[string]         `yaml:"resp-ip,omitempty"`
-	Mark       types.Listable[uint64]         `yaml:"mark,omitempty"`
-	Env        map[string]string              `yaml:"env,omitempty"`
-	Metadata   map[string]string              `yaml:"metadata,omitempty"`
-	Plugin     *RuleMatchPluginOption         `yaml:"plugin,omitempty"`
+	Listener   types.Listable[string]         `config:"listener,omitempty"`
+	ClientIP   types.Listable[string]         `config:"client-ip,omitempty"`
+	QType      types.Listable[types.DNSQType] `config:"qtype,omitempty"`
+	QName      types.Listable[string]         `config:"qname,omitempty"`
+	HasRespMsg *bool                          `config:"has-resp-msg,omitempty"`
+	RespIP     types.Listable[string]         `config:"resp-ip,omitempty"`
+	Mark       types.Listable[uint64]         `config:"mark,omitempty"`
+	Env        map[string]string              `config:"env,omitempty"`
+	Metadata   map[string]string              `config:"metadata,omitempty"`
+	Plugin     *RuleMatchPluginOption         `config:"plugin,omitempty"`
 	//
-	MatchOr  types.Listable[RuleMatchItem] `yaml:"match-or,omitempty"`
-	MatchAnd types.Listable[RuleMatchItem] `yaml:"match-and,omitempty"`
+	MatchOr  types.Listable[RuleMatchItem] `config:"match-or,omitempty"`
+	MatchAnd types.Listable[RuleMatchItem] `config:"match-and,omitempty"`
 	//
-	Invert bool `yaml:"invert,omitempty"`
+	Invert bool `config:"invert,omitempty"`
 }
 
 type RuleExecItem struct {
-	Mark     *uint64                 `yaml:"mark,omitempty"`
-	Metadata map[string]string       `yaml:"metadata,omitempty"`
-	Plugin   *RuleExecPluginOption   `yaml:"plugin,omitempty"`
-	Upstream *string                 `yaml:"upstream,omitempty"`
-	JumpTo   *types.Listable[string] `yaml:"jump-to,omitempty"`
-	GoTo     *string                 `yaml:"go-to,omitempty"`
-	SetTTL   *uint32                 `yaml:"set-ttl,omitempty"`
-	Clean    *bool                   `yaml:"clean,omitempty"`
-	Return   any                     `yaml:"return,omitempty"`
+	Mark     *uint64                 `config:"mark,omitempty"`
+	Metadata map[string]string       `config:"metadata,omitempty"`
+	Plugin   *RuleExecPluginOption   `config:"plugin,omitempty"`
+	Upstream *string                 `config:"upstream,omitempty"`
+	JumpTo   *types.Listable[string] `config:"jump-to,omitempty"`
+	GoTo     *string                 `config:"go-to,omitempty"`
+	SetTTL   *uint32                 `config:"set-ttl,omitempty"`
+	Clean    *bool                   `config:"clean,omitempty"`
+	Return   any                     `config:"return,omitempty"`
 }
 
 type _RuleExecItem RuleExecItem
 
-func (r *RuleExecItem) UnmarshalYAML(unmarshal func(any) error) error {
+func (r *RuleExecItem) Unmarshal(from reflect.Value) error {
 	var stringOperate string
-	err := unmarshal(&stringOperate)
+	err := mapstructure.Decode(from.Interface(), &stringOperate)
 	if err == nil {
 		switch stringOperate {
 		case "return":
@@ -69,6 +72,6 @@ func (r *RuleExecItem) UnmarshalYAML(unmarshal func(any) error) error {
 		}
 		return nil
 	}
-	err = unmarshal((*_RuleExecItem)(r))
+	err = mapstructure.Decode(from.Interface(), (*_RuleExecItem)(r))
 	return err
 }

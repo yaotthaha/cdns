@@ -55,10 +55,10 @@ func NewQueryTestUpstream(ctx context.Context, logger log.ContextLogger, options
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.QueryTestOptions == nil {
 		return nil, fmt.Errorf("create querytest upstream fail: options is empty")
 	}
-	querytestOptions := options.Options.(*upstream.UpstreamQueryTestOptions)
+	querytestOptions := options.QueryTestOptions
 	if querytestOptions.Upstreams == nil || len(querytestOptions.Upstreams) == 0 {
 		return nil, fmt.Errorf("create querytest upstream fail: upstreams is empty")
 	}

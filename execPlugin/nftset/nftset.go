@@ -16,7 +16,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -58,13 +58,17 @@ func NewNftSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 		tag: tag,
 	}
 
-	optionBytes, err := yaml.Marshal(args)
+	var op option
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
-	err = yaml.Unmarshal(optionBytes, &n.option)
+	err = decoder.Decode(args)
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 	var h bool
 	if n.option.TableName4 != "" && n.option.SetName4 != "" {

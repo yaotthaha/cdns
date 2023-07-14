@@ -39,10 +39,10 @@ func NewTCPListener(ctx context.Context, core adapter.Core, logger log.ContextLo
 		core:   core,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.TCPOptions == nil {
 		return nil, fmt.Errorf("create tcp listener fail: options is empty")
 	}
-	tcpOptions := options.Options.(*listener.ListenerTCPOptions)
+	tcpOptions := options.TCPOptions
 	listenAddr, err := parseBasicOptions(tcpOptions.Listen, 53)
 	if err != nil {
 		return nil, fmt.Errorf("create tcp listener fail: %s", err)

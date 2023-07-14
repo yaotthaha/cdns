@@ -53,10 +53,10 @@ func NewQUICUpstream(ctx context.Context, logger log.ContextLogger, options upst
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.QUICOptions == nil {
 		return nil, fmt.Errorf("create quic upstream fail: options is empty")
 	}
-	quicOptions := options.Options.(*upstream.UpstreamQUICOptions)
+	quicOptions := options.QUICOptions
 	if quicOptions.QueryTimeout > 0 {
 		u.queryTimeout = time.Duration(quicOptions.QueryTimeout)
 	} else {

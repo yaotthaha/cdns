@@ -52,10 +52,10 @@ func NewTLSUpstream(ctx context.Context, logger log.ContextLogger, options upstr
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.TLSOptions == nil {
 		return nil, fmt.Errorf("create tls upstream fail: options is empty")
 	}
-	tlsOptions := options.Options.(*upstream.UpstreamTLSOptions)
+	tlsOptions := options.TLSOptions
 	if tlsOptions.QueryTimeout > 0 {
 		u.queryTimeout = time.Duration(tlsOptions.QueryTimeout)
 	} else {

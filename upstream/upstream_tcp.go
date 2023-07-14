@@ -50,10 +50,10 @@ func NewTCPUpstream(ctx context.Context, logger log.ContextLogger, options upstr
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.TCPOptions == nil {
 		return nil, fmt.Errorf("create tcp upstream fail: options is empty")
 	}
-	tcpOptions := options.Options.(*upstream.UpstreamTCPOptions)
+	tcpOptions := options.TCPOptions
 	if tcpOptions.QueryTimeout > 0 {
 		u.queryTimeout = time.Duration(tcpOptions.QueryTimeout)
 	} else {

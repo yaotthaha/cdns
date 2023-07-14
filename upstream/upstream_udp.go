@@ -51,10 +51,10 @@ func NewUDPUpstream(ctx context.Context, logger log.ContextLogger, options upstr
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.UDPOptions == nil {
 		return nil, fmt.Errorf("create udp upstream fail: options is empty")
 	}
-	udpOptions := options.Options.(*upstream.UpstreamUDPOptions)
+	udpOptions := options.UDPOptions
 	if udpOptions.QueryTimeout > 0 {
 		u.queryTimeout = time.Duration(udpOptions.QueryTimeout)
 	} else {

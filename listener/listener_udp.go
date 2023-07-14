@@ -38,11 +38,11 @@ func NewUDPListener(ctx context.Context, core adapter.Core, logger log.ContextLo
 		core:   core,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.UDPOptions == nil {
 		return nil, fmt.Errorf("create udp listener fail: options is empty")
 	}
-	tcpOptions := options.Options.(*listener.ListenerUDPOptions)
-	listenAddr, err := parseBasicOptions(tcpOptions.Listen, 53)
+	udpOptions := options.UDPOptions
+	listenAddr, err := parseBasicOptions(udpOptions.Listen, 53)
 	if err != nil {
 		return nil, fmt.Errorf("create udp listener fail: %s", err)
 	}

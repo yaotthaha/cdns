@@ -36,10 +36,10 @@ func NewRandomUpstream(logger log.ContextLogger, options upstream.UpstreamOption
 		tag:    options.Tag,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.RandomOptions == nil {
 		return nil, fmt.Errorf("create random upstream fail: options is empty")
 	}
-	randomOptions := options.Options.(*upstream.UpstreamRandomOptions)
+	randomOptions := options.RandomOptions
 	if randomOptions.Upstreams == nil || len(randomOptions.Upstreams) == 0 {
 		return nil, fmt.Errorf("create random upstream fail: upstreams is empty")
 	}

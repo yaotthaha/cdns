@@ -1,5 +1,5 @@
 package listener
 
 type ListenerUDPOptions struct {
-	Listen string `yaml:"listen"`
+	Listen string `config:"listen"`
 }

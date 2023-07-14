@@ -5,14 +5,14 @@ import (
 )
 
 type UpstreamHTTPSOptions struct {
-	Address        string `yaml:"address"`
-	TLSOptions     `yaml:",inline"`
-	ConnectTimeout types.TimeDuration `yaml:"connect-timeout,omitempty"`
-	IdleTimeout    types.TimeDuration `yaml:"idle-timeout,omitempty"`
-	QueryTimeout   types.TimeDuration `yaml:"query-timeout,omitempty"`
-	Path           string             `yaml:"path"`
-	Header         map[string]string  `yaml:"header,omitempty"`
-	EnableH3       bool               `yaml:"enable-h3,omitempty"`
-	Dialer         DialerOptions      `yaml:"dialer,omitempty"`
-	Bootstrap      *BootstrapOptions  `yaml:"bootstrap,omitempty"`
+	Address        string `config:"address"`
+	TLSOptions     `config:",squash"`
+	ConnectTimeout types.TimeDuration `config:"connect-timeout,omitempty"`
+	IdleTimeout    types.TimeDuration `config:"idle-timeout,omitempty"`
+	QueryTimeout   types.TimeDuration `config:"query-timeout,omitempty"`
+	Path           string             `config:"path"`
+	Header         map[string]string  `config:"header,omitempty"`
+	EnableH3       bool               `config:"enable-h3,omitempty"`
+	Dialer         DialerOptions      `config:"dialer,omitempty"`
+	Bootstrap      *BootstrapOptions  `config:"bootstrap,omitempty"`
 }

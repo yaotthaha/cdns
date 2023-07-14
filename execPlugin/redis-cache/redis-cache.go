@@ -16,8 +16,8 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
+	"github.com/mitchellh/mapstructure"
 	"github.com/redis/go-redis/v9"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -58,14 +58,17 @@ func NewRedisCache(tag string, args map[string]any) (adapter.ExecPlugin, error) 
 	r := &RedisCache{
 		tag: tag,
 	}
-	optionBytes, err := yaml.Marshal(args)
-	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
-	}
+
 	var op option
-	err = yaml.Unmarshal(optionBytes, &op)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result: &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
+	}
+	err = decoder.Decode(args)
+	if err != nil {
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 	if op.Address == "" {
 		return nil, fmt.Errorf("address must be not empty")

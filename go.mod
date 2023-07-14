@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi v1.5.4
 	github.com/google/nftables v0.1.0
 	github.com/miekg/dns v1.1.54
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/oschwald/maxminddb-golang v1.10.0
 	github.com/quic-go/quic-go v0.35.1
 	github.com/redis/go-redis/v9 v9.0.5
@@ -19,6 +20,8 @@ require (
 	golang.org/x/sys v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/mitchellh/mapstructure v1.5.0 => github.com/yaotthaha/mapstructure v0.0.0-20230714003344-1d3a074884d2
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect

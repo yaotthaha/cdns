@@ -41,10 +41,10 @@ func NewTLSListener(ctx context.Context, core adapter.Core, logger log.ContextLo
 		core:   core,
 		logger: logger,
 	}
-	if options.Options == nil {
+	if options.TLSOptions == nil {
 		return nil, fmt.Errorf("create tls listener fail: options is empty")
 	}
-	tlsOptions := options.Options.(*listener.ListenerTLSOptions)
+	tlsOptions := options.TLSOptions
 	listenAddr, err := parseBasicOptions(tlsOptions.Listen, 853)
 	if err != nil {
 		return nil, fmt.Errorf("create tls listener fail: %s", err)

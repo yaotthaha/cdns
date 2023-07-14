@@ -13,7 +13,7 @@ import (
 	"github.com/yaotthaha/cdns/lib/types"
 	"github.com/yaotthaha/cdns/log"
 
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 const PluginType = "script"
@@ -54,14 +54,17 @@ func NewScript(tag string, args map[string]any) (adapter.MatchPlugin, error) {
 		tag: tag,
 	}
 
-	optionBytes, err := yaml.Marshal(args)
-	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
-	}
 	var op option
-	err = yaml.Unmarshal(optionBytes, &op)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
+	}
+	err = decoder.Decode(args)
+	if err != nil {
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 	if op.Cmd == "" {
 		return nil, fmt.Errorf("cmd is nil")

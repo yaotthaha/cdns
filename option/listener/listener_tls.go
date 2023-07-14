@@ -3,7 +3,7 @@ package listener
 import "github.com/yaotthaha/cdns/lib/types"
 
 type ListenerTLSOptions struct {
-	Listen      string             `yaml:"listen"`
-	IdleTimeout types.TimeDuration `yaml:"idle-timeout,omitempty"`
-	TLSOption   TLSOptions         `yaml:",inline"`
+	Listen      string             `config:"listen"`
+	IdleTimeout types.TimeDuration `config:"idle-timeout,omitempty"`
+	TLSOption   TLSOptions         `config:",squash"`
 }

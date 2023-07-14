@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -53,14 +53,18 @@ func NewHosts(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	h := &Hosts{
 		tag: tag,
 	}
-	optionBytes, err := yaml.Marshal(args)
-	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
-	}
+
 	var op option
-	err = yaml.Unmarshal(optionBytes, &op)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
+	}
+	err = decoder.Decode(args)
+	if err != nil {
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 	if op.Rule != nil && len(op.Rule) > 0 {
 		insideRule, err := loadFromArray(op.Rule)

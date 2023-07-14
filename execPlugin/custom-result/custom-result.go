@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 const PluginType = "custom-result"
@@ -57,14 +57,17 @@ func NewCustomResult(tag string, args map[string]any) (adapter.ExecPlugin, error
 		tag: tag,
 	}
 
-	optionBytes, err := yaml.Marshal(args)
-	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
-	}
 	var op option
-	err = yaml.Unmarshal(optionBytes, &op)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
+	}
+	err = decoder.Decode(args)
+	if err != nil {
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 	if op.Result == nil || len(op.Result) == 0 {
 		return nil, fmt.Errorf("result is nil")

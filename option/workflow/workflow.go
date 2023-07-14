@@ -2,23 +2,24 @@ package workflow
 
 import (
 	"fmt"
+	"reflect"
 
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 type _WorkflowOption struct {
-	Tag   string           `yaml:"tag"`
-	Rules []map[string]any `yaml:"rules"`
+	Tag   string           `config:"tag"`
+	Rules []map[string]any `config:"rules"`
 }
 
 type WorkflowOptions struct {
-	Tag   string `yaml:"tag"`
-	Rules []any  `yaml:"rules"`
+	Tag   string `config:"tag"`
+	Rules []any  `config:"rules"`
 }
 
-func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (w *WorkflowOptions) Unmarshal(from reflect.Value) error {
 	var workflowOption _WorkflowOption
-	err := unmarshal(&workflowOption)
+	err := mapstructure.Decode(from.Interface(), &workflowOption)
 	if err != nil {
 		return err
 	}
@@ -55,11 +56,7 @@ func (w *WorkflowOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 			default:
 				return fmt.Errorf("invalid workflow rules: %+v", v)
 			}
-			ruleBytes, err := yaml.Marshal(v)
-			if err != nil {
-				return err
-			}
-			err = yaml.Unmarshal(ruleBytes, r)
+			err = mapstructure.Decode(v, r)
 			if err != nil {
 				return err
 			}

@@ -2,65 +2,82 @@ package listener
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/yaotthaha/cdns/constant"
 	"github.com/yaotthaha/cdns/lib/types"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 type ListenerOptions struct {
-	Tag      string `yaml:"tag"`
-	Type     string `yaml:"type"`
-	Options  any    `yaml:"options"`
-	Workflow string `yaml:"workflow"`
+	Tag      string `config:"tag"`
+	Type     string `config:"type"`
+	Workflow string `config:"workflow"`
+	//
+	UDPOptions  *ListenerUDPOptions
+	TCPOptions  *ListenerTCPOptions
+	TLSOptions  *ListenerTLSOptions
+	HTTPOptions *ListenerHTTPOptions
 }
 
-type GetOptions interface {
-	GetOptions() any
+type _ListenerOptions struct {
+	Tag      string         `config:"tag"`
+	Type     string         `config:"type"`
+	Options  map[string]any `config:"options"`
+	Workflow string         `config:"workflow"`
 }
 
-type ListenerTypeOptions[T any] struct {
-	Tag     string `yaml:"tag"`
-	Type    string `yaml:"type"`
-	Options *T     `yaml:"options"`
-}
-
-func (l *ListenerTypeOptions[T]) GetOptions() any {
-	return l.Options
-}
-
-type _ListenerOptions ListenerOptions
-
-func (l *ListenerOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	err := unmarshal((*_ListenerOptions)(l))
+func (l *ListenerOptions) Unmarshal(from reflect.Value) error {
+	var _listenerOptions _ListenerOptions
+	err := mapstructure.Decode(from.Interface(), &_listenerOptions)
 	if err != nil {
 		return err
 	}
-	if l.Tag == "" {
+	if _listenerOptions.Tag == "" {
 		return fmt.Errorf("listener tag is required")
+	} else {
+		l.Tag = _listenerOptions.Tag
 	}
-	var opts GetOptions
+	if _listenerOptions.Workflow == "" {
+		return fmt.Errorf("listener workflow is required")
+	} else {
+		l.Workflow = _listenerOptions.Workflow
+	}
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		TagName:    "config",
+	}
+	l.Type = _listenerOptions.Type
 	switch l.Type {
 	case constant.ListenerUDP:
-		opts = &ListenerTypeOptions[ListenerUDPOptions]{}
+		l.UDPOptions = &ListenerUDPOptions{}
+		decoderConfig.Result = l.UDPOptions
 	case constant.ListenerTCP:
-		opts = &ListenerTypeOptions[ListenerTCPOptions]{}
+		l.TCPOptions = &ListenerTCPOptions{}
+		decoderConfig.Result = l.TCPOptions
 	case constant.ListenerTLS:
-		opts = &ListenerTypeOptions[ListenerTLSOptions]{}
+		l.TLSOptions = &ListenerTLSOptions{}
+		decoderConfig.Result = l.TLSOptions
 	case constant.ListenerHTTP:
-		opts = &ListenerTypeOptions[ListenHTTPOptions]{}
+		l.HTTPOptions = &ListenerHTTPOptions{}
+		decoderConfig.Result = l.HTTPOptions
 	default:
 		return fmt.Errorf("listener type %s is not supported", l.Type)
 	}
-	err = unmarshal(opts)
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
 	if err != nil {
 		return err
 	}
-	l.Options = opts.GetOptions()
+	err = decoder.Decode(_listenerOptions.Options)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 type TLSOptions struct {
-	CertFile     string                 `yaml:"cert-file,omitempty"`
-	KeyFile      string                 `yaml:"key-file,inline"`
-	ClientCAFile types.Listable[string] `yaml:"client-ca-file,omitempty"`
+	CertFile     string                 `config:"cert-file,omitempty"`
+	KeyFile      string                 `config:"key-file,inline"`
+	ClientCAFile types.Listable[string] `config:"client-ca-file,omitempty"`
 }

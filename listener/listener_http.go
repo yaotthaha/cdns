@@ -61,10 +61,10 @@ func NewHTTPListener(ctx context.Context, core adapter.Core, logger log.ContextL
 	l.dnsMsgPool.New(func() *dns.Msg {
 		return new(dns.Msg)
 	})
-	if options.Options == nil {
+	if options.HTTPOptions == nil {
 		return nil, fmt.Errorf("listener options is required")
 	}
-	httpOptions := options.Options.(*listener.ListenHTTPOptions)
+	httpOptions := options.HTTPOptions
 	if httpOptions.Path != "" {
 		l.path = httpOptions.Path
 	} else {

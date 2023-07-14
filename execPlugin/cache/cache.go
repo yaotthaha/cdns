@@ -17,7 +17,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/miekg/dns"
-	"gopkg.in/yaml.v3"
+	"github.com/mitchellh/mapstructure"
 )
 
 const PluginType = "cache"
@@ -52,9 +52,9 @@ type Cache struct {
 }
 
 type option struct {
-	Size         uint64             `yaml:"size"`
-	DumpFile     string             `yaml:"dump-file"`
-	DumpInterval types.TimeDuration `yaml:"dump-interval"`
+	Size         uint64             `config:"size"`
+	DumpFile     string             `config:"dump-file"`
+	DumpInterval types.TimeDuration `config:"dump-interval"`
 }
 
 func NewCache(tag string, args map[string]any) (adapter.ExecPlugin, error) {
@@ -62,14 +62,17 @@ func NewCache(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 		tag: tag,
 	}
 
-	optionBytes, err := yaml.Marshal(args)
-	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
-	}
 	var op option
-	err = yaml.Unmarshal(optionBytes, &op)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.UnmarshalInterfaceHookFunc(),
+		Result:     &op,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse args fail: %s", err)
+		return nil, fmt.Errorf("decode config fail: %s", err)
+	}
+	err = decoder.Decode(args)
+	if err != nil {
+		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
 
 	if op.Size > 0 {
