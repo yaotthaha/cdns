@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Option struct {
+type Options struct {
 	LogOptions         LogOptions                       `config:"log"`
 	APIOptions         APIOptions                       `config:"api"`
 	UpstreamOptions    []upstream.UpstreamOptions       `config:"upstreams"`
@@ -33,7 +33,7 @@ const (
 	YAML configType = "yaml"
 )
 
-func ReadFile(file string) (*Option, error) {
+func ReadFile(file string) (*Options, error) {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func ReadFile(file string) (*Option, error) {
 	}
 }
 
-func ReadContent(content []byte, configType configType) (*Option, error) {
+func ReadContent(content []byte, configType configType) (*Options, error) {
 	var optionMap map[string]any
 	var err error
 	switch configType {
@@ -68,7 +68,7 @@ func ReadContent(content []byte, configType configType) (*Option, error) {
 	if err != nil {
 		return nil, err
 	}
-	var option Option
+	var option Options
 	err = tools.NewMapStructureDecoderWithResult(&option).Decode(optionMap)
 	if err != nil {
 		return nil, err

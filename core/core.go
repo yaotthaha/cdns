@@ -39,7 +39,7 @@ func init() {
 	execPlugin.Register()
 }
 
-func New(ctx context.Context, logger log.Logger, options option.Option) (adapter.Core, error) {
+func New(ctx context.Context, logger log.Logger, options option.Options) (adapter.Core, error) {
 	core := &Core{
 		ctx:    ctx,
 		logger: log.NewTagLogger(logger, "core"),
