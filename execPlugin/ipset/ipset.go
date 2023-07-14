@@ -174,7 +174,35 @@ type dnsAddrRR struct {
 	ttl  time.Duration // second
 }
 
-func (i *IPSet) Exec(ctx context.Context, _ map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
+func (i *IPSet) Exec(ctx context.Context, args map[string]any, dnsCtx *adapter.DNSContext) (constant.ReturnMode, error) {
+	if sAny, ok := args["set-client-ip"]; ok {
+		if s, ok := sAny.(bool); ok && s {
+			if dnsCtx.ClientIP.IsValid() {
+				if i.ipset4 != nil && dnsCtx.ClientIP.Is4() {
+					ttl := time.Duration(i.option.TTL4)
+					prefix := netip.PrefixFrom(dnsCtx.ClientIP, int(i.option.Mask4)).Masked()
+					err := i.ipset4.AddCIDR(prefix, ttl)
+					if err != nil {
+						i.logger.ErrorContext(ctx, fmt.Sprintf("add addr %s to %s fail: %s", prefix.String(), i.ipset4.Name(), err))
+					} else {
+						i.logger.DebugContext(ctx, fmt.Sprintf("add addr %s to %s, ttl: %s", prefix.String(), i.ipset4.Name(), ttl.String()))
+					}
+					return constant.Continue, nil
+				}
+				if i.ipset6 != nil && dnsCtx.ClientIP.Is6() {
+					ttl := time.Duration(i.option.TTL6)
+					prefix := netip.PrefixFrom(dnsCtx.ClientIP, int(i.option.Mask6)).Masked()
+					err := i.ipset6.AddCIDR(prefix, ttl)
+					if err != nil {
+						i.logger.ErrorContext(ctx, fmt.Sprintf("add addr %s to %s fail: %s", prefix.String(), i.ipset6.Name(), err))
+					} else {
+						i.logger.DebugContext(ctx, fmt.Sprintf("add addr %s to %s, ttl: %s", prefix.String(), i.ipset6.Name(), ttl.String()))
+					}
+					return constant.Continue, nil
+				}
+			}
+		}
+	}
 	respMsg := dnsCtx.RespMsg
 	if respMsg == nil {
 		return constant.Continue, nil
