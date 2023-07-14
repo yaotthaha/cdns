@@ -4,6 +4,7 @@ import (
 	// use custom exec plugin
 	_ "github.com/yaotthaha/cdns/execPlugin/cache"
 	_ "github.com/yaotthaha/cdns/execPlugin/concurrent-workflow"
+	// _ "github.com/yaotthaha/cdns/execPlugin/custom-result"
 	_ "github.com/yaotthaha/cdns/execPlugin/ecs"
 	_ "github.com/yaotthaha/cdns/execPlugin/hosts"
 	_ "github.com/yaotthaha/cdns/execPlugin/ipset"
