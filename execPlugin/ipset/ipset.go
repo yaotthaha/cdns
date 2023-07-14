@@ -61,6 +61,7 @@ func NewIPSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
+	i.option = op
 	if i.option.Name4 == "" && i.option.Name6 == "" {
 		return nil, fmt.Errorf("empty args")
 	}

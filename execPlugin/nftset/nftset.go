@@ -63,6 +63,7 @@ func NewNftSet(tag string, args map[string]any) (adapter.ExecPlugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode config fail: %s", err)
 	}
+	n.option = op
 	var h bool
 	if n.option.TableName4 != "" && n.option.SetName4 != "" {
 		h = true
