@@ -31,6 +31,15 @@ func AddContextTag(ctx context.Context) context.Context {
 	return context.WithValue(ctx, (*contextTag)(nil), cmg)
 }
 
+func AddContextTagFromTag(ctx context.Context, tag string) context.Context {
+	cmg := &contextMsg{
+		tag:   tag,
+		color: RandomColor(),
+		start: time.Now(),
+	}
+	return context.WithValue(ctx, (*contextTag)(nil), cmg)
+}
+
 func GetContextTag(ctx context.Context) string {
 	v := ctx.Value((*contextTag)(nil))
 	if v == nil {
